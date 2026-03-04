@@ -1,0 +1,336 @@
+---
+title: Autorun rules
+description: Configure automatic tool execution when ports are discovered
+---
+
+Autorun rules allow QtRecon to automatically execute specific tools when certain ports are discovered during network scanning. This enables hands-free enumeration and saves time during reconnaissance.
+
+## How autorun works
+
+When Nmap discovers an open port on a target:
+
+1. QtRecon checks the `autorun` section for matching rules
+2. If a rule exists for that port/protocol combination, the associated tools are automatically launched
+3. Tools execute with the discovered IP address and port number
+4. Results are captured and displayed in QtRecon
+
+<Warning>
+  Autorun can launch many processes simultaneously on large networks. Ensure your system has sufficient resources and consider the impact on the target network.
+</Warning>
+
+## Autorun section structure
+
+The `autorun` section is organized by protocol (TCP/UDP), then by port number:
+
+```json
+"autorun": {
+  "tcp": {
+    "80": ["tool1", "tool2"],
+    "443": ["tool3"],
+    "any": ["tool4"]
+  },
+  "udp": {
+    "161": ["tool5"]
+  }
+}
+```
+
+### Protocol sections
+
+<ParamField path="tcp" type="object">
+  Rules for TCP ports
+</ParamField>
+
+<ParamField path="udp" type="object">
+  Rules for UDP ports
+</ParamField>
+
+### Port numbers
+
+Each port number (as a string) maps to an array of tool IDs that should be executed when that port is discovered.
+
+<ParamField path="any" type="array">
+  Special key that matches **all** ports of the specified protocol. Tools listed here run for every discovered port.
+</ParamField>
+
+## Example autorun configurations
+
+### Web services (ports 80 and 443)
+
+Automatically scan web servers with feroxbuster and Nikto:
+
+```json
+"autorun": {
+  "tcp": {
+    "80": [
+      "feroxbuster",
+      "nikto"
+    ],
+    "443": [
+      "feroxbuster"
+    ]
+  }
+}
+```
+
+<Tip>
+  Port 443 often benefits from directory brute-forcing but Nikto may produce excessive SSL warnings, so you might choose to run only feroxbuster automatically.
+</Tip>
+
+### SMB enumeration (port 445)
+
+Automatically run custom SMB enumeration:
+
+```json
+"autorun": {
+  "tcp": {
+    "445": [
+      "smb_script"
+    ]
+  }
+}
+```
+
+### DNS zone transfer (port 53)
+
+Attempt DNS zone transfer on discovered DNS servers:
+
+```json
+"autorun": {
+  "tcp": {
+    "53": [
+      "axfr_no_domain"
+    ]
+  }
+}
+```
+
+### Database services
+
+Run Nmap scripts against discovered databases:
+
+```json
+"autorun": {
+  "tcp": {
+    "1433": [
+      "nmap_mssql"
+    ],
+    "3306": [
+      "nmap_mysql"
+    ]
+  }
+}
+```
+
+### Redis enumeration (port 6379)
+
+Execute custom Redis enumeration script:
+
+```json
+"autorun": {
+  "tcp": {
+    "6379": [
+      "redis_script"
+    ]
+  }
+}
+```
+
+### SNMP enumeration (UDP 161)
+
+Autorun also works for UDP services:
+
+```json
+"autorun": {
+  "udp": {
+    "161": [
+      "onesixtyone"
+    ]
+  }
+}
+```
+
+### Running tools on all ports
+
+Use the special `"any"` key to run tools on every discovered port:
+
+```json
+"autorun": {
+  "tcp": {
+    "any": [
+      "nuclei"
+    ]
+  }
+}
+```
+
+<Warning>
+  Using `"any"` can generate significant traffic and process load. Use it carefully, especially with large port ranges or multiple targets.
+</Warning>
+
+## Complete autorun example
+
+Here's a comprehensive autorun configuration from the QtRecon example:
+
+```json
+"autorun": {
+  "tcp": {
+    "21": [
+      "nmap_ftp"
+    ],
+    "53": [
+      "axfr_no_domain"
+    ],
+    "80": [
+      "feroxbuster",
+      "nikto"
+    ],
+    "88": [
+      "kerbrute"
+    ],
+    "443": [
+      "feroxbuster"
+    ],
+    "445": [
+      "smb_script"
+    ],
+    "1433": [
+      "nmap_mssql"
+    ],
+    "2049": [
+      "nfs-showmount"
+    ],
+    "3268": [
+      "ldapsearch_anonymous"
+    ],
+    "3306": [
+      "nmap_mysql"
+    ],
+    "3389": [
+      "nmap_rdp"
+    ],
+    "6379": [
+      "redis_script"
+    ]
+  },
+  "udp": {
+    "161": [
+      "onesixtyone"
+    ]
+  }
+}
+```
+
+## Enabling and disabling autorun
+
+Control autorun behavior through the `user_prefs` section:
+
+```json
+"user_prefs": {
+  "enable_autorun": true,
+  "enable_autorun_on_xml_import": false
+}
+```
+
+<ParamField path="enable_autorun" type="boolean" default="true">
+  Globally enable or disable autorun functionality
+</ParamField>
+
+<ParamField path="enable_autorun_on_xml_import" type="boolean" default="false">
+  Whether to trigger autorun rules when importing existing Nmap XML files
+</ParamField>
+
+<Note>
+  You can toggle autorun on/off without editing the configuration by accessing the preferences menu in QtRecon.
+</Note>
+
+## Relationship to port associations
+
+The `autorun` section is separate from `ports_associations`:
+
+<AccordionGroup>
+  <Accordion title="ports_associations">
+    Defines which tools are **available** to run manually against specific ports. These appear in context menus when right-clicking on discovered services.
+    
+    ```json
+    "ports_associations": {
+      "tcp": {
+        "80": ["firefox", "nikto", "feroxbuster", "sqlmap"]
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="autorun">
+    Defines which tools **automatically execute** when ports are discovered. This is a subset of associated tools that you want to run without manual intervention.
+    
+    ```json
+    "autorun": {
+      "tcp": {
+        "80": ["nikto", "feroxbuster"]
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+Typically, `autorun` contains a subset of the tools listed in `ports_associations`. You might want Firefox available for manual browsing, but not automatically launched.
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Start conservative">
+    Begin with a minimal autorun configuration and expand gradually. Too many autorun rules can overwhelm your system and the target network.
+  </Accordion>
+
+  <Accordion title="Avoid aggressive tools in autorun">
+    Don't autorun tools that:
+    - Require user interaction
+    - Are very noisy or aggressive
+    - Generate massive amounts of traffic
+    - Have a high false-positive rate
+  </Accordion>
+
+  <Accordion title="Use detached mode for autorun tools">
+    Tools configured for autorun should typically have `"detached": false` so QtRecon can track their output and completion status.
+  </Accordion>
+
+  <Accordion title="Be cautious with 'any'">
+    The `"any"` keyword is powerful but can be overwhelming. Consider using it only for lightweight, passive tools like Nuclei.
+  </Accordion>
+
+  <Accordion title="Monitor resource usage">
+    When scanning large networks, autorun can spawn hundreds of processes. Monitor system resources and adjust accordingly.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Tools not running automatically">
+    - Verify `enable_autorun` is `true` in `user_prefs`
+    - Check that tool IDs in `autorun` exactly match those in `user_binaries`
+    - Ensure the discovered port matches the configured port number (as a string)
+  </Accordion>
+
+  <Accordion title="Too many processes spawning">
+    - Reduce the number of tools in autorun rules
+    - Remove or limit use of the `"any"` keyword
+    - Temporarily disable autorun while scanning large networks
+  </Accordion>
+
+  <Accordion title="Autorun triggering on XML import">
+    Set `"enable_autorun_on_xml_import": false` to prevent autorun when loading saved scan results.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tool setup" icon="wrench" href="/configuration/tool-setup">
+    Learn how to configure the tools used in autorun rules
+  </Card>
+  <Card title="Variables" icon="dollar-sign" href="/configuration/variables">
+    Use variables for dynamic tool arguments
+  </Card>
+</CardGroup>

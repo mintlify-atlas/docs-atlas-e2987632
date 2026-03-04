@@ -1,0 +1,176 @@
+---
+title: Scanning
+description: Network scanning with Nmap and Masscan integration
+---
+
+QtRecon provides comprehensive network scanning capabilities through Nmap integration, with support for XML import and scan result parsing.
+
+## Nmap integration
+
+QtRecon seamlessly integrates with Nmap to perform network reconnaissance. Configure your Nmap binary and default options in the configuration:
+
+```json conf.json
+"core_binaries": {
+  "nmap": {
+    "binary": "/usr/bin/nmap",
+    "args": []
+  }
+},
+"nmap_options": {
+  "ports": "T:-,U:53,161,631",
+  "type": "-sS",
+  "speed": "-T3",
+  "skip_host_discovery": false,
+  "version_probing": true,
+  "default_scripts": true,
+  "os_detection": true,
+  "tcp_and_udp": true,
+  "additional_args": "-v --min-rate 500"
+}
+```
+
+### Scan types
+
+QtRecon supports multiple scan types:
+
+<AccordionGroup>
+  <Accordion title="TCP SYN scan" icon="network-wired">
+    Stealthy SYN scanning (`-sS`) is the default scan type. This half-open scan doesn't complete TCP connections.
+  </Accordion>
+
+  <Accordion title="Version detection" icon="magnifying-glass">
+    Enable version probing to detect service versions running on open ports. This helps identify specific software and versions.
+  </Accordion>
+
+  <Accordion title="OS detection" icon="computer">
+    Operating system detection analyzes TCP/IP stack fingerprints to identify the target's OS.
+  </Accordion>
+
+  <Accordion title="Script scanning" icon="code">
+    Default NSE scripts provide additional enumeration and vulnerability detection capabilities.
+  </Accordion>
+</AccordionGroup>
+
+## XML parsing
+
+QtRecon includes a powerful XML parser to import Nmap scan results. The `NmapParser` class processes both Nmap and Masscan XML output.
+
+```python utils/NmapParser.py
+class NmapParser:
+    def __init__(self, filename):
+        with open(filename, 'r') as f:
+            self.f = ''.join(f.readlines())
+
+    def parse_xml(self) -> dict:
+        # Get online hosts
+        hosts = dict()
+        
+        root = XMLparser.fromstring(re.sub(r'&#([a-zA-Z0-9]+);?', r'[#\1;]', self.f))
+        
+        for host in root.iter('host'):
+            if root.attrib['scanner'] == 'nmap' and host.find('status').attrib['state'] == 'down':
+                continue
+                
+            ip = host.find('./address/[@addrtype="ipv4"]').attrib['addr']
+```
+
+### Parsed data structure
+
+The parser extracts comprehensive host information:
+
+<Steps>
+  <Step title="Host identification">
+    IP address, MAC address, and hostname are extracted from the scan results.
+  </Step>
+
+  <Step title="OS fingerprinting">
+    Operating system family is identified when available, defaulting to "unknown" if not detected.
+  </Step>
+
+  <Step title="Port enumeration">
+    Open ports are cataloged by protocol (TCP/UDP) with service descriptions including product, version, and extra info.
+  </Step>
+</Steps>
+
+```python utils/NmapParser.py
+hosts[ip] = {
+    'ip': ip, 
+    'hostname': hostname, 
+    'mac': mac, 
+    'os': os, 
+    'ports': {'tcp': {}, 'udp': {}}
+}
+
+# Get open ports
+for port in host.iter('port'):
+    if port.find('state').attrib['state'] == 'open':
+        service = port.find('./service')
+        description = ""
+        if service is not None:
+            if 'product' in service.attrib.keys():
+                description = service.attrib['product']
+            else:
+                description = service.attrib['name']
+                
+            if 'version' in service.attrib.keys():
+                description += f" {service.attrib['version']}"
+            if 'extrainfo' in service.attrib.keys():
+                description += f" ({service.attrib['extrainfo']})"
+```
+
+## Import results
+
+You can import existing Nmap XML files into QtRecon to populate the database with discovered hosts and services.
+
+<Warning>
+  When importing XML files, autorun may be triggered if enabled in preferences. Configure `enable_autorun_on_xml_import` to control this behavior.
+</Warning>
+
+```json conf.json
+"user_prefs": {
+  "enable_autorun": true,
+  "enable_autorun_on_xml_import": false
+}
+```
+
+## Masscan support
+
+QtRecon's XML parser is compatible with Masscan output. The parser automatically detects the scanner type and processes the results accordingly:
+
+```python utils/NmapParser.py
+if root.attrib['scanner'] == 'nmap' and host.find('status').attrib['state'] == 'down':
+    continue
+```
+
+<Note>
+  Both Nmap and Masscan XML outputs use the same parsing logic, ensuring consistent host and port data across different scanning tools.
+</Note>
+
+## Text format parsing
+
+In addition to XML parsing, QtRecon can parse standard `.nmap` text output:
+
+```python utils/NmapParser.py
+def parse_nmap(self) -> dict:
+    """
+    From a .nmap file, search data related to target, and return as string
+    @return: dict
+    """
+    blacklist = [
+        "Read data files from: ", 
+        "Please report any incorrect results at", 
+        "Nmap done at"
+    ]
+    
+    string_parsing = ""
+    for line in self.f.split('\n'):
+        # Remove comments
+        if line.startswith('#'):
+            continue
+        # Remove useless elements
+        if any(unwanted_element in line for unwanted_element in blacklist):
+            continue
+        string_parsing += line + '\n'
+```
+
+This filters out comments and non-essential information, extracting only the scan results for each discovered host.

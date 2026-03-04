@@ -1,0 +1,234 @@
+---
+title: Tool automation
+description: Autorun system for automatic tool execution on discovered services
+---
+
+QtRecon's autorun system automatically launches reconnaissance tools when specific ports are discovered during scanning. This automation accelerates the enumeration phase of penetration testing.
+
+## Autorun system
+
+The autorun feature executes configured programs automatically when matching ports are found on target hosts.
+
+<Note>
+  Enable or disable autorun globally through the application menu or configuration. You can also control whether autorun triggers on XML imports separately.
+</Note>
+
+```json conf.json
+"user_prefs": {
+  "enable_autorun": true,
+  "enable_autorun_on_xml_import": false
+}
+```
+
+### How autorun works
+
+When a scan completes or XML results are imported, QtRecon checks for autorun configurations matching the discovered ports:
+
+```python core/controller.py
+def autorun(self, new_hosts: dict | list):
+    """
+    :param new_hosts: {host_id: {'tcp': [], 'udp': []}   
+    # tcp and udp are empty if new host (or if every service must be autorun'd again
+    """
+    for new_host in new_hosts:
+        host_details = self.host_model.get_host_details(new_host)
+        if host_details:
+            must_autorun_everything = not (len(new_hosts[new_host]['tcp'])!=0 
+                                          or len(new_hosts[new_host]['udp'])!=0)
+            for proto in ['tcp', 'udp']:
+                if proto not in Config.get()['autorun'].keys():
+                    continue
+                for port in Config.get()['autorun'][proto]:
+                    if port.upper() == 'ANY':
+                        # ... autorun logic
+                    else:
+                        for program in Config.get()['autorun'][proto][port]:
+                            self.log('AUTORUN', 
+                                f"Running {Config.get()['user_binaries'][program]['name']} "
+                                f"on {proto}://{host_details['ip']}:{port}")
+```
+
+## Port associations
+
+Port associations define which tools can be run against specific services, available in the right-click context menu.
+
+```json conf.json
+"ports_associations": {
+  "tcp": {
+    "any": [
+      "netcat",
+      "firefox",
+      "nuclei",
+      "feroxbuster"
+    ],
+    "80": [
+      "nikto",
+      "sqlmap"
+    ],
+    "445": [
+      "smb_script",
+      "smb_script_authenticated"
+    ]
+  },
+  "udp": {
+    "161": [
+      "onesixtyone"
+    ]
+  }
+}
+```
+
+<Tip>
+  Use `"any"` to make a tool available for all discovered ports of that protocol.
+</Tip>
+
+## Autorun configuration
+
+The autorun section determines which programs execute automatically when ports are discovered:
+
+```json conf.json
+"autorun": {
+  "tcp": {
+    "80": [
+      "feroxbuster",
+      "nikto"
+    ],
+    "443": [
+      "feroxbuster"
+    ],
+    "445": [
+      "smb_script"
+    ],
+    "3389": [
+      "nmap_rdp"
+    ]
+  },
+  "udp": {
+    "161": [
+      "onesixtyone"
+    ]
+  }
+}
+```
+
+<Warning>
+  Autorun programs execute immediately upon port discovery. Ensure your configured tools are non-destructive for automated execution.
+</Warning>
+
+## Program execution modes
+
+QtRecon supports two execution modes for programs: detached and attached.
+
+### Detached vs attached
+
+Programs can run as separate processes or integrated within QtRecon tabs:
+
+<CardGroup cols={2}>
+  <Card title="Detached mode" icon="arrow-up-right-from-square">
+    Launches the program as an independent process. Output is not captured in QtRecon. Ideal for GUI applications and interactive tools.
+  </Card>
+
+  <Card title="Attached mode" icon="window-maximize">
+    Runs the program and captures output in a QtRecon tab. Perfect for enumeration tools where you want to review results later.
+  </Card>
+</CardGroup>
+
+```json conf.json
+"firefox": {
+  "name": "Firefox",
+  "text": "Launch Firefox",
+  "detached": true,
+  "in_terminal": false,
+  "binary": "/usr/bin/firefox",
+  "args": ["-P", "tmp", "http://%%%IP%%%:%%%PORT%%%/"]
+}
+```
+
+### In terminal execution
+
+Detached programs can optionally run in a terminal emulator:
+
+```json conf.json
+"ssh": {
+  "name": "ssh",
+  "text": "Connect with SSH",
+  "detached": true,
+  "in_terminal": true,
+  "binary": "/usr/bin/ssh",
+  "args": ["-o", "UserKnownHostsFile=/dev/null", "%%%USERNAME%%%@%%%IP%%%"]
+}
+```
+
+The terminal binary is configured in `core_binaries`:
+
+```json conf.json
+"core_binaries": {
+  "terminal": {
+    "binary": "/usr/bin/konsole",
+    "args": ["-e"]
+  }
+}
+```
+
+```python core/controller.py
+if program['detached']:
+    if 'in_terminal' in program.keys() and program['in_terminal']:
+        args.insert(0, program['binary'])
+        args = Config.get()['core_binaries']['terminal']['args'] + args
+        self.start_detached_job(
+            Config.get()['core_binaries']['terminal']['binary'], 
+            args, 
+            working_directory
+        )
+    else:
+        self.start_detached_job(program['binary'], args, working_directory)
+```
+
+## Edit before launch
+
+The `edit_before_launch` option prompts you to review and modify the command before execution:
+
+```json conf.json
+"feroxbuster": {
+  "name": "feroxbuster",
+  "text": "Scan files and folders with feroxbuster",
+  "detached": false,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/feroxbuster",
+  "args": ["-n", "-k", "-e", "--thorough", "-B", "--no-state", 
+           "-C", "404", "400", "--url", "%%%PROTO%%%://%%%IP%%%:%%%PORT%%%/", 
+           "-w", "/usr/share/wordlists/SecLists/Discovery/Web-Content/raft-large-directories-and-files.txt"]
+}
+```
+
+```python core/controller.py
+if 'edit_before_launch' in program.keys() and program['edit_before_launch']:
+    reply, validated = QInputDialog.getText(
+        self.ui, 
+        'Edit command', 
+        f"This program is set to be reviewed before launching. "
+        f"Here is the command that will be executed:", 
+        text=program['binary'] + ' '+' '.join(args)
+    )
+    if reply and validated:
+        program['binary'], *args = shlex.split(reply)
+    else:
+        return
+```
+
+<Tip>
+  Set `edit_before_launch: true` for commands that require parameter tuning or when you want to review variable substitution before execution.
+</Tip>
+
+## Manual autorun trigger
+
+You can manually trigger autorun for specific hosts via the context menu:
+
+```python core/view.py
+autorun_action = top_menu.addAction("Run all autorun configured programs")
+
+if action == autorun_action:
+    self.controller.autorun([host['id']])
+```
+
+This executes all configured autorun programs for the selected host, regardless of when the ports were discovered.

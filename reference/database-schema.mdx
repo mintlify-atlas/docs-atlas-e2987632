@@ -1,0 +1,168 @@
+---
+title: Database schema
+description: Complete reference for QtRecon's SQLite database structure
+---
+
+QtRecon uses an in-memory SQLite database to store reconnaissance data. The database is initialized with the following schema:
+
+## Tables
+
+### hosts
+
+Stores information about discovered hosts.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT NOT NULL | Unique host identifier |
+| `os` | TEXT | | Operating system information |
+| `ip` | TEXT | UNIQUE | IP address of the host |
+| `hostname` | TEXT | | Hostname |
+| `mac` | TEXT | | MAC address |
+| `highlight` | TEXT | | Highlight color for the host |
+| `pwned` | INTEGER | NOT NULL DEFAULT 0 CHECK(pwned IN (0,1)) | Flag indicating if host is compromised |
+| `nmap` | TEXT | | Nmap scan results |
+| `notes` | TEXT | | User notes |
+
+### hosts_ports
+
+Stores port information for each host.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `host_id` | INTEGER | Foreign key to hosts table |
+| `proto` | TEXT | Protocol (TCP/UDP) |
+| `port` | TEXT | Port number |
+| `status` | TEXT | Port status (open, closed, filtered) |
+| `description` | TEXT | Service description |
+
+### hosts_tabs
+
+Stores terminal/command output tabs for each host.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT NOT NULL | Unique tab identifier |
+| `host_id` | INTEGER | | Foreign key to hosts table |
+| `job_id` | INTEGER | | Foreign key to jobs table |
+| `cmdline` | TEXT | | Command line executed |
+| `title` | TEXT | | Tab title |
+| `text` | TEXT | | Tab content/output |
+
+### hosts_creds
+
+Stores credentials associated with hosts.
+
+| Column | Type | Constraints | Default | Description |
+|--------|------|-------------|---------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT NOT NULL | | Unique credential identifier |
+| `host_id` | INTEGER | | | Foreign key to hosts table |
+| `type` | TEXT | | 'password' | Credential type |
+| `domain` | TEXT | | '' | Domain |
+| `username` | TEXT | | '' | Username |
+| `password` | TEXT | | '' | Password |
+
+### logs
+
+Stores application log entries.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT NOT NULL | Unique log identifier |
+| `date` | TEXT | | Timestamp of log entry |
+| `type` | TEXT | | Log type (INFO, ERROR, RUNTIME) |
+| `log` | TEXT | | Log message |
+
+### jobs
+
+Stores information about running and completed jobs.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | INTEGER | PRIMARY KEY AUTOINCREMENT NOT NULL | Unique job identifier |
+| `host_id` | INTEGER | | Foreign key to hosts table |
+| `type` | TEXT | | Job type |
+| `timestamp` | TEXT | | Job start timestamp |
+| `state` | TEXT | | Job state (running, completed, failed) |
+| `command` | TEXT | | Command being executed |
+
+## Database operations
+
+### In-memory database
+
+By default, QtRecon uses an in-memory SQLite database:
+
+```python
+Database.init_DB()
+```
+
+This creates a fresh database instance with all tables initialized.
+
+### Import and export
+
+QtRecon can import and export database files:
+
+- **Import**: `Database.import_DB(filename)` - Loads a database from disk
+- **Export**: `Database.export_DB(filename)` - Saves the current database to disk
+
+<Note>
+When exporting, jobs are always deleted and RUNTIME logs are excluded. If `delete_logs_on_save` is enabled, all logs are deleted.
+</Note>
+
+## Compatibility migrations
+
+QtRecon includes automatic database migrations for backward compatibility:
+
+### hosts_creds table (QtRecon < 1.2)
+
+If the `hosts_creds` table doesn't exist, it will be created automatically on import:
+
+```sql
+CREATE TABLE hosts_creds(
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  host_id INTEGER,
+  type TEXT DEFAULT 'password',
+  domain TEXT DEFAULT '',
+  username TEXT DEFAULT '',
+  password TEXT DEFAULT ''
+)
+```
+
+### UNIQUE constraint on hosts.ip (QtRecon < 1.6)
+
+For databases without the UNIQUE constraint on the `ip` column, a unique index is created:
+
+```sql
+CREATE UNIQUE INDEX host_ip ON hosts(ip)
+```
+
+### cmdline field in hosts_tabs (QtRecon < 1.7)
+
+If the `cmdline` field is missing from `hosts_tabs`, the table is recreated with the field:
+
+```sql
+-- Rename old table
+ALTER TABLE hosts_tabs RENAME TO hosts_tabs_temp;
+
+-- Create new table with cmdline field
+CREATE TABLE hosts_tabs(
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  host_id INTEGER,
+  job_id INTEGER,
+  cmdline TEXT,
+  title TEXT,
+  text
+);
+
+-- Copy data from old table
+INSERT INTO hosts_tabs(id, host_id, job_id, title, text)
+SELECT id, host_id, job_id, title, text FROM hosts_tabs_temp;
+
+-- Drop old table
+DROP TABLE hosts_tabs_temp;
+```
+
+## Unsaved data tracking
+
+QtRecon tracks whether the database has unsaved changes using the `Database.has_unsaved_data` flag. This flag is set to `True` whenever INSERT, UPDATE, or DELETE operations are performed (excluding RUNTIME operations).
+
+The current save file is tracked in `Database.current_savefile`.

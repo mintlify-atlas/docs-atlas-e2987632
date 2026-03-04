@@ -1,80 +1,266 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart guide
+description: Run your first reconnaissance scan with QtRecon
 ---
 
-## Get started in three steps
+This guide walks you through launching QtRecon, running your first network scan, and viewing the results.
 
-Get your documentation site running locally and make your first customization.
+## Launch the application
 
-### Step 1: Set up your local environment
+Start QtRecon from your terminal:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```bash
+cd ~/tools/qtrecon
+pipenv run python qtrecon.py
+```
 
-### Step 2: Deploy your changes
+You can also open an existing workspace:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+```bash
+pipenv run python qtrecon.py /path/to/workspace.db
+```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Note>
+  QtRecon workspace files are SQLite databases with the `.db` extension. You can edit them directly if needed.
+</Note>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Run your first scan
 
-### Step 3: Go live
+<Steps>
+  <Step title="Open the new scan dialog">
+    Click **File > New Scan** or press the new scan button in the toolbar.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    The scan dialog allows you to configure:
+    - Target IP addresses or CIDR ranges
+    - Port ranges (TCP and UDP)
+    - Scan type (SYN, Connect, etc.)
+    - Scan speed (`-T0` through `-T5`)
+    - Additional options like OS detection and default scripts
+  </Step>
+
+  <Step title="Configure your scan">
+    For a quick test scan, use these settings:
+
+    **Target**: `192.168.1.0/24` (adjust to your network)
+
+    **Port range**: `T:-,U:53,161,631`
+    - `T:-` scans all TCP ports
+    - `U:53,161,631` scans specific UDP ports
+
+    **Scan type**: `-sS` (SYN scan, requires root)
+
+    **Speed**: `-T3` (normal)
+
+    **Options**:
+    - ✓ Version probing
+    - ✓ Default scripts
+    - ✓ OS detection
+
+    <Tip>
+      Check "Save as default" to use these settings for future scans.
+    </Tip>
+  </Step>
+
+  <Step title="Start the scan">
+    Click **Start Scan**.
+
+    If you're running a privileged scan (like `-sS`), you'll be prompted for your password by the graphical sudo program (pkexec, gksu, etc.).
+
+    The scan progress appears in the **Jobs** tab at the bottom of the window.
+  </Step>
+
+  <Step title="Wait for results">
+    As nmap discovers hosts, they appear in the **Hosts** tab on the left side of the window.
+
+    Watch the log panel for messages:
+    ```
+    [INFO] Starting new scan on 192.168.1.0/24
+    [INFO] Finished nmap scan (5 hosts)
+    ```
+
+    If autorun is enabled in your configuration, QtRecon will automatically launch tools against discovered services.
+  </Step>
+</Steps>
+
+## View scan results
+
+<Steps>
+  <Step title="Select a host">
+    Click on any host in the **Hosts** panel on the left.
+
+    The right panel displays:
+    - Host information (IP, hostname, OS, MAC address)
+    - Open ports and services
+    - Notes section for your observations
+  </Step>
+
+  <Step title="Explore the ports tab">
+    The **Ports** tab shows all discovered services with:
+    - Port number
+    - Protocol (TCP/UDP)
+    - Service name and version
+
+    Right-click on a port to:
+    - Launch configured tools for that port
+    - Copy the port number
+    - View service details
+  </Step>
+
+  <Step title="View nmap output">
+    Click the **nmap** tab to see the raw nmap output for the selected host.
+
+    This includes:
+    - Full version detection results
+    - Script output from NSE scripts
+    - OS detection details
+  </Step>
+
+  <Step title="Check application tabs">
+    If autorun launched any tools, you'll see additional tabs with names like:
+    - "feroxbuster"
+    - "Nikto"
+    - "SMB enum"
+
+    These tabs display real-time output from running tools.
+
+    <Tip>
+      Running jobs show a clock icon. Completed jobs show a checkmark or X icon.
+    </Tip>
+  </Step>
+</Steps>
+
+## Launch tools manually
+
+You can launch tools interactively against any discovered service.
+
+<Steps>
+  <Step title="Select a host and port">
+    Click a host in the **Hosts** panel, then select a port in the **Ports** tab.
+  </Step>
+
+  <Step title="Right-click to see available tools">
+    Right-click on the port to see all configured tools that can run against this service.
+
+    For example, port 80 might show:
+    - Launch Firefox
+    - Launch Nikto
+    - Scan files and folders with feroxbuster
+    - Launch Nuclei
+    - Launch Sqlmap in batch mode
+  </Step>
+
+  <Step title="Execute the tool">
+    Click a tool to launch it.
+
+    QtRecon automatically replaces variables in the command:
+    - `%%%IP%%%` → Target IP address
+    - `%%%PORT%%%` → Selected port
+    - `%%%HOSTNAME%%%` → Target hostname (or IP if no hostname)
+
+    If the tool requires credentials and you have stored credentials for this host, QtRecon will ask if you want to use them.
+  </Step>
+
+  <Step title="View tool output">
+    For non-detached tools, a new tab appears in the right panel showing real-time output.
+
+    For detached tools (like browsers or terminals), the program launches in a separate window.
+  </Step>
+</Steps>
+
+## Work with the Services view
+
+The **Services** tab provides a port-centric view of your scan results.
+
+<Steps>
+  <Step title="Switch to the Services tab">
+    Click the **Services (X)** tab in the main work area.
+
+    This shows all unique ports discovered across all hosts.
+  </Step>
+
+  <Step title="Select a port">
+    Click on any port to see all hosts with that port open.
+
+    For example, clicking "80/tcp" shows all web servers in your scan.
+  </Step>
+
+  <Step title="Launch tools against multiple hosts">
+    Right-click on a host in this view to launch tools against that specific instance of the service.
+  </Step>
+</Steps>
+
+## Add notes and credentials
+
+<Steps>
+  <Step title="Add notes to a host">
+    Select a host and click in the **Notes** section at the bottom right.
+
+    You can:
+    - Type or paste text
+    - Drag and drop images
+    - Use basic formatting
+
+    Notes are automatically saved to your workspace.
+  </Step>
+
+  <Step title="Store credentials">
+    Click the **Credentials** tab for a host, then click **Add Credential**.
+
+    Fill in:
+    - **Type**: password, hash, or ssh_key
+    - **Domain**: localhost, hostname, or domain name
+    - **Username**: account username
+    - **Password/Hash**: the credential value
+
+    <Tip>
+      When you launch a tool that uses `%%%USERNAME%%%` or `%%%PASSWORD%%%` variables, QtRecon will offer to substitute stored credentials.
+    </Tip>
+  </Step>
+</Steps>
+
+## Save your workspace
+
+<Steps>
+  <Step title="Save the database">
+    Click **File > Save** or press **Ctrl+S**.
+
+    Choose a filename and location for your workspace database.
+
+    ```
+    ~/pentest/client-recon.db
+    ```
+  </Step>
+
+  <Step title="Enable autosave (optional)">
+    Click **File > Autosave database every 5 mins** to automatically save your work.
+
+    <Note>
+      Autosave is only available after you've manually saved the workspace at least once.
+    </Note>
+  </Step>
+
+  <Step title="Load an existing workspace">
+    Click **File > Open** to load a previously saved workspace.
+
+    All hosts, scan results, notes, and credentials are restored.
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've run your first scan, explore QtRecon's advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Configure custom tools" icon="wrench">
+    Press **F10** to open settings and add your own tools to the user_binaries section
+  </Card>
+  <Card title="Set up autorun" icon="bolt">
+    Configure which tools launch automatically when specific ports are discovered
+  </Card>
+  <Card title="Use snippets" icon="code">
+    Access the Snippets panel for reverse shells and common commands with automatic variable replacement for `%%%LHOST%%%` and `%%%LPORT%%%`
+  </Card>
+  <Card title="Import XML files" icon="file-import">
+    Click **File > Import nmap XML** to import existing nmap scan results
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

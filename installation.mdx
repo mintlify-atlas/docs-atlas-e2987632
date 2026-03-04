@@ -1,0 +1,176 @@
+---
+title: Installation
+description: Install QtRecon and configure your system for reconnaissance automation
+---
+
+## System requirements
+
+QtRecon requires:
+
+- Python 3.8 or higher
+- pipenv for dependency management
+- PySide6 for the Qt GUI
+- nmap for network scanning
+- Linux operating system (tested on Debian-based distributions)
+
+## Install with pipenv
+
+<Steps>
+  <Step title="Clone or download the source code">
+    Download the QtRecon source code to your local machine.
+
+    ```bash
+    cd ~/tools
+    git clone <repository-url> qtrecon
+    cd qtrecon
+    ```
+  </Step>
+
+  <Step title="Install dependencies with pipenv">
+    Use pipenv to install all required Python packages from the Pipfile.
+
+    ```bash
+    pipenv install
+    ```
+
+    This installs the following dependencies:
+    - `pyside6` - Qt 6 bindings for Python
+    - `ansi2html` - Convert ANSI terminal output to HTML
+    - `html2text` - Convert HTML to plain text
+    - `netifaces` - Network interface information
+    - `pillow` - Image processing for screenshots
+    - `psutil` - Process and system utilities
+  </Step>
+
+  <Step title="Launch QtRecon">
+    Run QtRecon using pipenv:
+
+    ```bash
+    pipenv run python qtrecon.py
+    ```
+
+    On first launch, QtRecon will:
+    - Create the configuration directory at `$XDG_CONFIG_HOME/qtrecon/` or `~/.config/qtrecon/`
+    - Copy the default configuration from `conf.json.example` to `conf.json`
+    - Check that required binaries are accessible
+  </Step>
+</Steps>
+
+## Configuration
+
+QtRecon stores its configuration at:
+
+```
+$XDG_CONFIG_HOME/qtrecon/conf.json
+```
+
+Or if `XDG_CONFIG_HOME` is not set:
+
+```
+~/.config/qtrecon/conf.json
+```
+
+The configuration file is automatically created from `conf.json.example` on first launch.
+
+### Configuration structure
+
+The configuration file includes:
+
+- **core_binaries**: Main programs like nmap, terminal, and pkexec for privileged scans
+- **user_binaries**: All tools you want to use (nikto, feroxbuster, netcat, etc.)
+- **ports_associations**: Which tools can be used on which ports
+- **autorun**: Programs to launch automatically when ports are discovered
+- **user_prefs**: General preferences and options
+- **user_variables**: Custom variables for command replacement
+- **snippets**: Code snippets and reverse shells
+- **nmap_options**: Default nmap scan settings
+
+<Note>
+  You can edit the configuration through the GUI by pressing **F10** or by editing the JSON file directly.
+</Note>
+
+## Set up privileged scans
+
+To perform SYN scans (`-sS`) and OS detection, nmap requires root privileges. QtRecon handles this using a graphical sudo program.
+
+<Steps>
+  <Step title="Configure the graphical sudo binary">
+    In your `conf.json`, set the `graphical_su` binary to a program like `pkexec`, `gksu`, or `kdesudo`:
+
+    ```json
+    "core_binaries": {
+      "graphical_su": {
+        "binary": "/usr/bin/pkexec",
+        "args": []
+      }
+    }
+    ```
+
+    Common options:
+    - `/usr/bin/pkexec` (PolicyKit, works on most modern systems)
+    - `/usr/bin/gksu` (older GTK systems)
+    - `/usr/bin/kdesudo` (KDE environments)
+  </Step>
+
+  <Step title="Ensure nmap is accessible">
+    Verify nmap is installed and the path is correct in `conf.json`:
+
+    ```json
+    "core_binaries": {
+      "nmap": {
+        "binary": "/usr/bin/nmap",
+        "args": []
+      }
+    }
+    ```
+
+    Check the nmap path:
+
+    ```bash
+    which nmap
+    ```
+  </Step>
+
+  <Step title="Handle umask restrictions (optional)">
+    If you have a restrictive umask, the XML files created by root may not be readable by your user.
+
+    <Warning>
+      **Option 1**: Run QtRecon as root (not recommended)
+
+      Set an empty string for `graphical_su` binary:
+
+      ```json
+      "graphical_su": {
+        "binary": "",
+        "args": []
+      }
+      ```
+
+      Then launch QtRecon with sudo:
+
+      ```bash
+      sudo pipenv run python qtrecon.py
+      ```
+    </Warning>
+
+    **Option 2** (recommended): Adjust your umask or use a wrapper script to ensure nmap output files are readable.
+  </Step>
+</Steps>
+
+## Verify installation
+
+When QtRecon starts successfully, you'll see:
+
+1. The main window with an empty host list
+2. A log message: "New project started ! Happy recon ;-)"
+3. Any warnings about missing binaries in the log panel
+
+<Note>
+  QtRecon will log warnings for any binaries in your configuration that cannot be found or are not executable. You can safely ignore warnings for tools you don't plan to use.
+</Note>
+
+## Next steps
+
+<Card title="Quickstart guide" icon="rocket" href="/quickstart">
+  Launch your first scan and explore the QtRecon interface
+</Card>

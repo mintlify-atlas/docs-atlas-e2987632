@@ -1,97 +1,215 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: QtRecon Documentation
+mode: custom
 ---
 
-## Setting up
+<div className="relative bg-gradient-to-br from-[#0f1117] via-[#1a1d27] to-[#0f1117] dark:bg-gradient-to-br dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#0f1117] bg-white py-20">
+  <div className="max-w-6xl mx-auto px-6">
+    <div className="flex flex-col lg:flex-row items-center gap-12">
+      <div className="flex-1 text-center lg:text-left">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-gray-100 mb-6">
+          Automate Your Recon Phase
+        </h1>
+        <p className="text-base sm:text-lg lg:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mb-8">
+          QtRecon is a powerful GUI tool that automates network reconnaissance, speeds up scanning workflows, and helps you manage targets, credentials, and tool execution from a unified interface.
+        </p>
+        <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
+          <a
+            href="/quickstart"
+            className="inline-block px-6 py-3 bg-[#040404] hover:bg-[#1a1a1a] text-white font-semibold rounded-lg transition-colors"
+          >
+            Get Started
+          </a>
+          <a
+            href="/features/scanning"
+            className="inline-block px-6 py-3 border border-gray-300 dark:border-[#27272a] bg-transparent hover:bg-gray-100 dark:hover:bg-[#242838] text-gray-900 dark:text-gray-100 font-semibold rounded-lg transition-colors"
+          >
+            Explore Features
+          </a>
+        </div>
+      </div>
+      <div className="flex-1 hidden lg:block">
+        <img
+          src="https://media.brand.dev/5e57db48-756d-48f2-9cc2-a2f03e27f500.png"
+          alt="QtRecon interface"
+          noZoom
+          className="w-full h-auto max-w-lg mx-auto"
+        />
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Quick start
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">
+      Get QtRecon running in minutes
+    </p>
+  </div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+  <Steps>
+    <Step title="Install dependencies">
+      Install QtRecon using pipenv to ensure all Python dependencies are properly managed.
 
-## Make it yours
+      ```bash
+      pipenv install
+      ```
+    </Step>
 
-Design a docs site that looks great and empowers your users.
+    <Step title="Launch the application">
+      Start QtRecon with the pipenv runtime environment.
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+      ```bash
+      pipenv run python qtrecon.py
+      ```
 
-## Create beautiful pages
+      The QtRecon GUI will open, ready to create your first reconnaissance workspace.
+    </Step>
 
-Everything you need to create world-class documentation.
+    <Step title="Configure your tools">
+      Set up your preferred security tools and scanning options through the configuration interface (F10) or by editing the JSON configuration file directly.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+      <Note>
+        QtRecon comes with a default configuration including common tools like nmap, nikto, feroxbuster, and nuclei. Customize these to match your workflow.
+      </Note>
+    </Step>
 
-## Need inspiration?
+    <Step title="Run your first scan">
+      Launch a network scan by entering target IP addresses or ranges, selecting scan options, and letting QtRecon automatically run configured tools when ports are discovered.
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+      ```bash
+      # Example: Run Nmap scan on a target
+      nmap -sS -T3 -v --min-rate 500 192.168.1.0/24
+      ```
+
+      <Accordion title="View scan results">
+        Scan results appear in real-time in the QtRecon interface, organized by host and port. Each discovered service can trigger autorun programs based on your configuration.
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Key features
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">
+      Everything you need for efficient reconnaissance
+    </p>
+  </div>
+
+  <CardGroup cols={2}>
+    <Card title="Automated scanning" icon="radar" href="/features/scanning">
+      Run Nmap scans with customizable options and automatically parse results into an organized workspace.
+    </Card>
+    <Card title="Tool automation" icon="bolt" href="/features/tool-automation">
+      Configure tools to run automatically when specific ports are discovered, saving time during reconnaissance.
+    </Card>
+    <Card title="Credential management" icon="key" href="/features/credentials">
+      Store and manage credentials per host with support for passwords, hashes, and SSH keys.
+    </Card>
+    <Card title="Screenshot capture" icon="camera" href="/features/screenshots">
+      Automatically capture screenshots at intervals to document your work and maintain proof records.
+    </Card>
+    <Card title="Workspace management" icon="database" href="/concepts/workspace">
+      Save and load reconnaissance sessions as SQLite databases for easy project organization.
+    </Card>
+    <Card title="Snippet library" icon="code" href="/features/snippets">
+      Store frequently used commands, payloads, and reverse shells for quick reference during engagements.
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Explore the documentation
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400">
+      Learn how to configure and use QtRecon effectively
+    </p>
+  </div>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="/concepts/architecture" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#040404] dark:hover:border-[#7c7c7c] overflow-hidden no-underline transition-colors bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Core Concepts</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Understand QtRecon's architecture, configuration system, and workspace model.
+        </p>
+        <div className="flex items-center gap-2 text-sm text-[#040404] dark:text-[#7c7c7c] group-hover:text-[#040404] dark:group-hover:text-[#d1d1d1] transition-colors">
+          <span>Learn more</span>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/configuration/configuration-file" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#040404] dark:hover:border-[#7c7c7c] overflow-hidden no-underline transition-colors bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Configuration Guide</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Set up tools, autorun rules, custom variables, and adjust QtRecon to your workflow.
+        </p>
+        <div className="flex items-center gap-2 text-sm text-[#040404] dark:text-[#7c7c7c] group-hover:text-[#040404] dark:group-hover:text-[#d1d1d1] transition-colors">
+          <span>Configure</span>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/guides/first-scan" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#040404] dark:hover:border-[#7c7c7c] overflow-hidden no-underline transition-colors bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Practical Guides</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Step-by-step walkthroughs for common reconnaissance workflows and advanced usage.
+        </p>
+        <div className="flex items-center gap-2 text-sm text-[#040404] dark:text-[#7c7c7c] group-hover:text-[#040404] dark:group-hover:text-[#d1d1d1] transition-colors">
+          <span>View guides</span>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+
+    <a href="/reference/troubleshooting" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#040404] dark:hover:border-[#7c7c7c] overflow-hidden no-underline transition-colors bg-white dark:bg-[#1a1d27]">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Reference</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Database schema, keyboard shortcuts, and troubleshooting common issues.
+        </p>
+        <div className="flex items-center gap-2 text-sm text-[#040404] dark:text-[#7c7c7c] group-hover:text-[#040404] dark:group-hover:text-[#d1d1d1] transition-colors">
+          <span>Browse reference</span>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27] p-8 sm:p-12 text-center">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Ready to streamline your recon workflow?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-8">
+      Install QtRecon and start automating your reconnaissance tasks today.
+    </p>
+    <a
+      href="/installation"
+      className="inline-block px-6 py-3 bg-[#040404] hover:bg-[#1a1a1a] text-white font-semibold rounded-lg transition-colors"
+    >
+      Install QtRecon
+    </a>
+  </div>
+</div>

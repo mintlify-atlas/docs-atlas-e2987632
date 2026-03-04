@@ -1,0 +1,267 @@
+---
+title: Adding custom tools
+description: Configure custom security tools and integrate them into your QtRecon workflow
+---
+
+QtRecon's power comes from its ability to integrate your favorite security tools. This guide shows you how to add custom tools to the `user_binaries` section and configure them for automatic or manual execution.
+
+## Understanding user_binaries
+
+Custom tools are defined in the `user_binaries` section of `conf.json`. Each tool has a unique identifier and configuration properties.
+
+### Tool configuration structure
+
+```json
+"user_binaries": {
+    "tool_id": {
+        "name": "Display Name",
+        "text": "Menu text shown to user",
+        "detached": true,
+        "in_terminal": false,
+        "edit_before_launch": false,
+        "binary": "/path/to/binary",
+        "icon": "/path/to/icon.png",
+        "args": ["arg1", "arg2"]
+    }
+}
+```
+
+**Configuration options:**
+- `name` - Short identifier for the tool
+- `text` - Description shown in context menus
+- `detached` - Run in background (true) or wait for completion (false)
+- `in_terminal` - Launch in a new terminal window
+- `edit_before_launch` - Prompt user to modify command before execution
+- `binary` - Full path to executable
+- `icon` - (Optional) Path to icon file
+- `args` - Array of command-line arguments
+
+## Using variable substitution
+
+QtRecon replaces special variables in your arguments at runtime:
+
+### Network variables
+- `%%%IP%%%` - Target IP address
+- `%%%PORT%%%` - Target port number
+- `%%%PROTO%%%` - Protocol (http/https)
+- `%%%LHOST%%%` - Local IP from preferred interfaces
+- `%%%LPORT%%%` - Preferred local port
+
+### Credential variables
+- `%%%DOMAIN%%%` - Domain name
+- `%%%USERNAME%%%` - Username
+- `%%%PASSWORD%%%` - Password
+- `%%%HASH%%%` - Hash value
+- `%%%SSH_KEY%%%` - SSH key path
+
+### Custom variables
+- `%%%VARIABLE_NAME%%%` - User-defined variables from `user_variables`
+
+## Example: Adding a custom tool
+
+<Steps>
+  <Step title="Choose your tool">
+    Let's add `ffuf` for web fuzzing. First, verify the binary path:
+
+    ```bash
+    which ffuf
+    # Output: /usr/bin/ffuf
+    ```
+  </Step>
+
+  <Step title="Define the tool configuration">
+    Add to `user_binaries` in `conf.json`:
+
+    ```json
+    "ffuf_dirs": {
+        "name": "ffuf",
+        "text": "Fuzz directories with ffuf",
+        "detached": false,
+        "in_terminal": false,
+        "edit_before_launch": false,
+        "binary": "/usr/bin/ffuf",
+        "args": [
+            "-u", "%%%PROTO%%%://%%%IP%%%:%%%PORT%%%/FUZZ",
+            "-w", "/usr/share/wordlists/dirb/common.txt",
+            "-mc", "200,204,301,302,307,401,403",
+            "-fc", "404"
+        ]
+    }
+    ```
+
+    This configuration:
+    - Uses protocol and IP variables for the target URL
+    - Specifies a wordlist path
+    - Filters by HTTP status codes
+    - Runs attached (shows progress in real-time)
+  </Step>
+
+  <Step title="Associate with port numbers">
+    Add your tool to `ports_associations` to make it available for specific ports:
+
+    ```json
+    "ports_associations": {
+        "tcp": {
+            "80": [
+                "nikto",
+                "sqlmap",
+                "ffuf_dirs"
+            ],
+            "443": [
+                "nikto",
+                "sqlmap",
+                "ffuf_dirs"
+            ]
+        }
+    }
+    ```
+
+    Your tool now appears in the context menu when right-clicking web service ports.
+  </Step>
+
+  <Step title="Add to autorun (optional)">
+    To run automatically when ports are discovered:
+
+    ```json
+    "autorun": {
+        "tcp": {
+            "80": [
+                "feroxbuster",
+                "nikto",
+                "ffuf_dirs"
+            ],
+            "443": [
+                "feroxbuster",
+                "ffuf_dirs"
+            ]
+        }
+    }
+    ```
+
+    <Warning>
+      Be careful with autorun - too many tools can overwhelm your system. Start with essential tools only.
+    </Warning>
+  </Step>
+
+  <Step title="Test the tool">
+    1. Scan a target with web services
+    2. Right-click on port 80 or 443
+    3. Select "Fuzz directories with ffuf"
+    4. View output in the newly created tab
+  </Step>
+</Steps>
+
+## Real-world examples from conf.json
+
+### Netcat listener
+
+```json
+"netcat": {
+    "name": "Netcat",
+    "text": "Run Netcat",
+    "detached": true,
+    "in_terminal": true,
+    "edit_before_launch": false,
+    "binary": "/usr/bin/ncat",
+    "args": ["-nv", "%%%IP%%%", "%%%PORT%%%"]
+}
+```
+
+Launches in a terminal window to interact with the service.
+
+### Authenticated SMB enumeration
+
+```json
+"smb_script_authenticated": {
+    "name": "SMB authenticated enum",
+    "text": "Launch authenticated custom smb enumeration script",
+    "detached": false,
+    "binary": "/bin/bash",
+    "args": [
+        "scripts/smb.sh",
+        "%%%IP%%%",
+        "%%%DOMAIN%%%",
+        "%%%USERNAME%%%",
+        "%%%PASSWORD%%%"
+    ]
+}
+```
+
+This tool prompts for credentials when credential variables are used.
+
+### Browser with custom profile
+
+```json
+"firefox": {
+    "name": "Firefox",
+    "text": "Launch Firefox",
+    "detached": true,
+    "in_terminal": false,
+    "edit_before_launch": false,
+    "binary": "/usr/bin/firefox",
+    "icon": "/usr/share/icons/hicolor/256x256/apps/firefox.png",
+    "args": ["-P", "tmp", "http://%%%IP%%%:%%%PORT%%%/"]
+}
+```
+
+Opens Firefox with a temporary profile for isolated testing.
+
+### Custom script with multiple arguments
+
+```json
+"redis_script": {
+    "name": "Redis enum",
+    "text": "Launch custom redis enumeration script",
+    "detached": false,
+    "binary": "/bin/bash",
+    "args": ["scripts/redis.sh", "%%%IP%%%"]
+}
+```
+
+References the custom script at `scripts/redis.sh:13-15`:
+```bash
+echo "$ nmap --script redis-info -sV -p 6379 $1"
+nmap --script redis-info -sV -p 6379 "$1"
+```
+
+## Associating with "any" port
+
+Some tools work on any port:
+
+```json
+"ports_associations": {
+    "tcp": {
+        "any": [
+            "netcat",
+            "firefox",
+            "nuclei"
+        ]
+    }
+}
+```
+
+These appear in the context menu regardless of port number.
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use descriptive names">
+    Make `text` field clear about what the tool does. Users see this in menus.
+  </Accordion>
+
+  <Accordion title="Test before adding to autorun">
+    Run tools manually first to verify they work correctly with your variables.
+  </Accordion>
+
+  <Accordion title="Handle credentials gracefully">
+    Tools with credential variables will prompt when credentials are available for a host.
+  </Accordion>
+
+  <Accordion title="Consider resource usage">
+    Set `detached: false` for resource-intensive tools to prevent running too many simultaneously.
+  </Accordion>
+
+  <Accordion title="Organize by service type">
+    Group related tools under logical port associations (web tools on 80/443, DB tools on database ports).
+  </Accordion>
+</AccordionGroup>

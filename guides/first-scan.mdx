@@ -1,0 +1,131 @@
+---
+title: Running your first scan
+description: Step-by-step guide to performing your first reconnaissance scan with QtRecon
+---
+
+This guide walks you through running your first network reconnaissance scan with QtRecon, from launching the application to analyzing results and leveraging automated tools.
+
+## Launch QtRecon
+
+<Steps>
+  <Step title="Start the application">
+    Launch QtRecon from your terminal:
+
+    ```bash
+    pipenv run python qtrecon.py
+    ```
+
+    The main window will open with an empty workspace ready for your first scan.
+  </Step>
+
+  <Step title="Enter target addresses">
+    In the scan dialog, enter your target IP addresses or ranges. QtRecon supports:
+
+    - Single IP: `192.168.1.10`
+    - IP range: `192.168.1.1-254`
+    - CIDR notation: `10.10.10.0/24`
+    - Multiple targets separated by spaces
+  </Step>
+
+  <Step title="Configure scan options">
+    Select your scan type and speed parameters:
+
+    **Scan type**
+    - `-sS` (SYN scan) - Default, requires privileges
+    - `-sT` (TCP connect scan) - No privileges required
+    - `-sU` (UDP scan) - Scan UDP ports
+
+    **Speed**
+    - `-T3` (Normal) - Recommended default
+    - `-T4` (Aggressive) - Faster scans
+    - `-T2` (Polite) - Slower, stealthier scans
+
+    **Port specification**
+    ```
+    T:-,U:53,161,631
+    ```
+    - `T:-` scans all TCP ports
+    - `U:53,161,631` scans specific UDP ports
+
+    Example configuration from `conf.json.example:576-586`:
+    ```json
+    "nmap_options": {
+        "ports": "T:-,U:53,161,631",
+        "type": "-sS",
+        "speed": "-T3",
+        "skip_host_discovery": false,
+        "version_probing": true,
+        "default_scripts": true,
+        "os_detection": true,
+        "tcp_and_udp": true,
+        "additional_args": "-v --min-rate 500"
+    }
+    ```
+  </Step>
+
+  <Step title="Start the scan">
+    Click the scan button to begin. QtRecon will:
+
+    - Execute nmap with your specified options
+    - Parse results in real-time
+    - Store output in `/tmp/QtRecon` (configurable)
+    - Display discovered hosts in the host list
+  </Step>
+
+  <Step title="View scan results">
+    As hosts are discovered, they appear in the left panel with:
+
+    - IP address and hostname
+    - Operating system detection results
+    - Open ports grouped by protocol (TCP/UDP)
+    - Service version information
+
+    Click any host to view detailed information in the right panel.
+  </Step>
+
+  <Step title="Observe autorun programs">
+    If autorun is enabled (`enable_autorun: true` in config), QtRecon automatically triggers tools when specific ports are discovered:
+
+    **Web services (ports 80, 443)**
+    - `feroxbuster` - Directory enumeration
+    - `nikto` - Web vulnerability scanner
+
+    **SMB (ports 135, 445)**
+    - `smb_script` - Custom SMB enumeration (`scripts/smb.sh`)
+
+    **Database services**
+    - Port 3306: `nmap_mysql` - MySQL scripts
+    - Port 1433: `nmap_mssql` - MSSQL scripts
+    - Port 6379: `redis_script` - Redis enumeration
+
+    **Other services**
+    - Port 53: `axfr_no_domain` - DNS zone transfer
+    - Port 161: `onesixtyone` - SNMP enumeration
+    - Port 88: `kerbrute` - Kerberos user enumeration
+
+    View running and completed jobs in the Jobs tab.
+  </Step>
+
+  <Step title="Explore host tabs">
+    Each automated tool creates a new tab under the selected host:
+
+    - Click a host in the left panel
+    - View tabs for each executed command
+    - Read full command output
+    - Copy results to clipboard
+    - Add notes specific to that host
+
+    Tabs are organized by:
+    - Command name (e.g., "Feroxbuster", "Nikto")
+    - Timestamp of execution
+    - Exit status (success/failure)
+  </Step>
+</Steps>
+
+## Next steps
+
+After your first scan completes:
+
+- [Add custom tools](/guides/custom-tools) to extend functionality
+- [Export your workspace](/guides/import-export) for later analysis
+- [Configure advanced options](/guides/advanced-usage) for specialized scans

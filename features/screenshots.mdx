@@ -1,0 +1,323 @@
+---
+title: Screenshots
+description: Automated screenshot capture with process tracking and intelligent deduplication
+---
+
+QtRecon includes a sophisticated screenshot module that automatically captures screen content at intervals, with intelligent deduplication and process tracking capabilities.
+
+## Screenshot module
+
+The screenshot module can run standalone or integrated within QtRecon, automatically capturing screenshots during penetration testing activities.
+
+```python utils/Screenshot.py
+class Screenshot:
+    previous_screenshots = []
+    nb_of_screenshots = 0
+    database = None
+    
+    def __init__(self, **kwargs):
+        '''
+        :param kwargs:
+            engine: str ("qt" | "external"),
+            dst_folder: str,
+            work_folder: str,
+            pixel_threshold_different_images: int,
+            check_locked_screen_cmd: str,
+            check_locked_screen_cmd_result: str,
+            screenshot_cmd: str,
+            check_locked_screen: bool,
+            convert_png_to_jpg: bool,
+            include_processes: bool
+        '''
+        self.__dict__.update(kwargs)
+        
+        self.begin_datetime = datetime.now()
+        self.folder = self.work_folder + f"/Autoscreen - {self.begin_datetime.year}"
+        os.makedirs(os.path.expanduser(self.folder))
+```
+
+## Screenshot engines
+
+QtRecon supports two screenshot engines:
+
+<CardGroup cols={2}>
+  <Card title="Qt engine" icon="camera">
+    Uses Qt's native screen capture capabilities for cross-platform compatibility.
+  </Card>
+  
+  <Card title="External engine" icon="terminal">
+    Calls external screenshot tools like Spectacle or scrot via command line.
+  </Card>
+</CardGroup>
+
+### Qt engine
+
+```python utils/Screenshot.py
+if self.engine == 'qt':
+    from PySide6.QtGui import QGuiApplication
+    # If the number of screens (= screenshots) changed:
+    if len(self.previous_screenshots) != len(QGuiApplication.screens()):
+        self.previous_screenshots = [None] * len(QGuiApplication.screens())
+    
+    for i, screen in enumerate(QGuiApplication.screens()):
+        original_pixmap = screen.grabWindow(0)
+        if not original_pixmap.save(f"{screenshot_filename_prefix}-{i}.png"):
+            return False
+        else:
+            screenshot_files.append(f"{screenshot_filename_prefix}-{i}.png")
+```
+
+<Tip>
+  The Qt engine automatically handles multiple monitors, creating separate screenshots for each display.
+</Tip>
+
+### External engine
+
+```python utils/Screenshot.py
+else:
+    if len(self.previous_screenshots) == 0:
+        self.previous_screenshots = [None]  # Let's consider there is only one screen
+    subprocess.run([
+        chunk.replace('%%%OUTPUT%%%', f"{screenshot_filename_prefix}.png") 
+        for chunk in self.screenshot_cmd.split()
+    ])
+    screenshot_files.append(f"{screenshot_filename_prefix}.png")
+```
+
+Configuration for external engine:
+
+```json conf.json
+"screenshots": {
+  "engine": "external",
+  "screenshot_cmd": "/usr/bin/spectacle -nfb -o %%%OUTPUT%%%"
+}
+```
+
+<Note>
+  The `%%%OUTPUT%%%` variable is replaced with the destination path and filename.
+</Note>
+
+## Capture interval
+
+Set the screenshot interval in seconds:
+
+```json conf.json
+"screenshots": {
+  "interval": 15
+}
+```
+
+```python utils/Screenshot.py
+while True:
+    try:
+        progress.reset(master_task)
+        progress.update(master_task, description="Screenshoting...")
+        
+        try:
+            screenshot_mgr.take_screenshot()
+        except Exception as e:
+            progress.console.print(f"[red]Failed to save screenshot ![/red]")
+        
+        # Tempo
+        for i in range(interval):
+            time.sleep(1)
+            progress.advance(master_task)
+```
+
+## Pixel threshold
+
+QtRecon uses intelligent deduplication to avoid saving identical screenshots:
+
+```json conf.json
+"screenshots": {
+  "pixel_threshold_different_images": 500
+}
+```
+
+```python utils/Screenshot.py
+for i, current_screenshot in enumerate(current_screenshots):
+    # If more than X pixels different from previous screenshots
+    if current_screenshot and (
+        not self.previous_screenshots[i] or 
+        len(set(ImageChops.difference(
+            current_screenshot, 
+            self.previous_screenshots[i]
+        ).getdata())) > self.pixel_threshold_different_images
+    ):
+        self.nb_of_screenshots += 1
+        self.previous_screenshots[i] = current_screenshot
+```
+
+<Info>
+  Screenshots are cropped (61 pixels from each edge) before comparison to ignore taskbars and window decorations that may change frequently.
+</Info>
+
+```python utils/Screenshot.py
+pil_img = Image.open(screenshot_file)
+pil_img_width, pil_img_height = pil_img.size
+current_screenshots.append(
+    pil_img.crop((61, 61, pil_img_width-61, pil_img_height - 61))
+)
+```
+
+## Locked screen detection
+
+QtRecon can detect when your screen is locked and skip capturing screenshots:
+
+```json conf.json
+"screenshots": {
+  "check_locked_screen": true,
+  "check_locked_screen_cmd": "dbus-send --session --dest=org.freedesktop.ScreenSaver --type=method_call --print-reply --reply-timeout=20000 /org/freedesktop/ScreenSaver org.freedesktop.ScreenSaver.GetActive",
+  "check_locked_screen_cmd_result": "boolean true"
+}
+```
+
+```python utils/Screenshot.py
+def take_screenshot(self) -> bool:
+    # Checking lockscreen:
+    if self.check_locked_screen:
+        cmd = subprocess.Popen(
+            self.check_locked_screen_cmd.split(), 
+            stdout=subprocess.PIPE
+        )
+        if any([self.check_locked_screen_cmd_result in line.decode() 
+                for line in cmd.stdout.readlines()]):
+            return False
+```
+
+<Warning>
+  The lock screen detection command is platform-specific. The default configuration works on Linux systems using D-Bus and freedesktop.org standards.
+</Warning>
+
+## Process tracking
+
+QtRecon can record all running processes when each screenshot is taken:
+
+```json conf.json
+"screenshots": {
+  "include_processes": true,
+  "processes_blacklist": ["systemd", "kthreadd", "dbus-send", "Xorg"],
+  "processes_ppid_blacklist": [1, 2]
+}
+```
+
+### Process database
+
+```python utils/Screenshot.py
+def create_DB(self):
+    self.database = sqlite3.connect(f'{self.folder}/autoscreen.sqlite')
+    self.database.row_factory = lambda C, R: {
+        c[0]: R[i] for i, c in enumerate(C.description)
+    }
+    
+    self.database.execute(
+        "CREATE TABLE processes("
+        "id integer primary key autoincrement not null, "
+        "screenshot_file text, "
+        "username text, "
+        "pid integer not null, "
+        "ppid integer not null, "
+        "cwd text, "
+        "name text, "
+        "cmdline text)"
+    )
+    self.database.commit()
+```
+
+### Recording processes
+
+```python utils/Screenshot.py
+if self.include_processes:
+    for process in psutil.process_iter():
+        if (process.ppid() not in self.processes_ppid_blacklist and 
+            process.name() not in self.processes_blacklist):
+            
+            query_filename = screenshot_files[i].removeprefix(self.folder + '/')
+            
+            try:
+                query_cwd = process.cwd()
+            except:
+                query_cwd = '?'
+            
+            try:
+                query_cmd = ' '.join(process.cmdline())
+            except psutil.ZombieProcess:
+                query_cmd = "<zombie process>"
+            
+            query = "INSERT INTO processes (screenshot_file, username, pid, ppid, cwd, name, cmdline) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            self.database.execute(query, (
+                query_filename, 
+                process.username(), 
+                process.pid, 
+                process.ppid(), 
+                query_cwd, 
+                process.name(), 
+                query_cmd
+            ))
+            self.database.commit()
+```
+
+### Search script
+
+QtRecon automatically generates a search script to find screenshots by process:
+
+```python utils/Screenshot.py
+res = db.execute(
+    "SELECT DISTINCT screenshot_file FROM processes "
+    "WHERE cmdline LIKE '%' || ? || '%'", 
+    (request,)
+)
+screenshot_files = res.fetchall()
+
+for screenshot_file in screenshot_files:
+    print(f"{screenshot_file[0]} -> {request}/{screenshot_file[0]}")
+    shutil.copyfile(screenshot_file[0], request + '/' + screenshot_file[0])
+```
+
+<Tip>
+  Use the generated `search.py` script to extract all screenshots taken while a specific process was running (e.g., `python search.py burpsuite`).
+</Tip>
+
+## PNG to JPG conversion
+
+Reduce storage space by converting PNG screenshots to JPG:
+
+```json conf.json
+"screenshots": {
+  "convert_png_to_jpg": true
+}
+```
+
+```python utils/Screenshot.py
+if self.convert_png_to_jpg:
+    subprocess.run([
+        'magick', 
+        screenshot_files[i], 
+        screenshot_files[i].removesuffix('.png') + '.jpg'
+    ])
+    os.remove(screenshot_files[i])
+    screenshot_files[i] = screenshot_files[i].removesuffix('.png') + '.jpg'
+```
+
+<Note>
+  Requires ImageMagick's `magick` command to be installed on your system.
+</Note>
+
+## Archive creation
+
+When you stop the screenshot module, all screenshots are automatically compressed:
+
+```python utils/Screenshot.py
+def save_archive(self):
+    self.archive = f'{self.dst_folder}/Autoscreen-{self.begin_datetime.year}{self.begin_datetime.month:02}{self.begin_datetime.day:02}_{self.begin_datetime.hour:02}{self.begin_datetime.minute:02}{self.begin_datetime.second:02}.tar.xz'
+    
+    cmd = ['tar', 'cJvpf', self.archive, '-C', self.folder, '.']
+    tar_output = subprocess.Popen(cmd,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE)
+```
+
+The archive includes:
+- All captured screenshots (JPG or PNG)
+- SQLite database with process information
+- Search script for querying by process name

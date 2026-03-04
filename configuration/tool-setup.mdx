@@ -1,0 +1,279 @@
+---
+title: Tool setup
+description: Configure custom tools and binaries in QtRecon
+---
+
+QtRecon allows you to configure custom tools and binaries that can be launched against discovered hosts and ports. These tools are defined in the `user_binaries` section of the configuration file.
+
+## User binaries structure
+
+Each tool in the `user_binaries` section follows this structure:
+
+```json
+"tool_id": {
+  "name": "Display Name",
+  "text": "Menu text description",
+  "binary": "/path/to/binary",
+  "args": ["arg1", "arg2"],
+  "detached": false,
+  "in_terminal": false,
+  "edit_before_launch": false,
+  "icon": "/path/to/icon.png"
+}
+```
+
+### Configuration parameters
+
+<ParamField path="name" type="string" required>
+  Display name shown in the QtRecon interface
+</ParamField>
+
+<ParamField path="text" type="string" required>
+  Description text shown in menus and tooltips
+</ParamField>
+
+<ParamField path="binary" type="string" required>
+  Full path to the executable binary
+</ParamField>
+
+<ParamField path="args" type="array" required>
+  Array of command-line arguments. Supports variable substitution.
+</ParamField>
+
+<ParamField path="detached" type="boolean" default="false">
+  If `true`, the process runs independently and QtRecon doesn't wait for it to finish
+</ParamField>
+
+<ParamField path="in_terminal" type="boolean" default="false">
+  If `true`, launches the tool in a terminal window
+</ParamField>
+
+<ParamField path="edit_before_launch" type="boolean" default="false">
+  If `true`, allows editing the command before execution
+</ParamField>
+
+<ParamField path="icon" type="string">
+  Optional path to an icon file for the tool
+</ParamField>
+
+## Variable substitution
+
+Arguments support dynamic variable substitution using the `%%%VARIABLE%%%` syntax. QtRecon automatically replaces these with actual values from the current context.
+
+### Available variables
+
+<CardGroup cols={3}>
+  <Card title="%%%IP%%%">
+    Target IP address
+  </Card>
+  <Card title="%%%PORT%%%">
+    Target port number
+  </Card>
+  <Card title="%%%PROTO%%%">
+    Protocol (http/https)
+  </Card>
+</CardGroup>
+
+See the [Variables](/configuration/variables) page for a complete list of available variables.
+
+## Example tool configurations
+
+### Netcat
+
+Launch an interactive Netcat connection:
+
+```json
+"netcat": {
+  "name": "Netcat",
+  "text": "Run Netcat",
+  "detached": true,
+  "in_terminal": true,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/ncat",
+  "args": ["-nv", "%%%IP%%%", "%%%PORT%%%"]
+}
+```
+
+<Tip>
+  Using `"detached": true` and `"in_terminal": true` is ideal for interactive tools like Netcat or SSH.
+</Tip>
+
+### Firefox
+
+Open a web service in Firefox:
+
+```json
+"firefox": {
+  "name": "Firefox",
+  "text": "Launch Firefox",
+  "detached": true,
+  "in_terminal": false,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/firefox",
+  "icon": "/usr/share/icons/hicolor/256x256/apps/firefox.png",
+  "args": ["-P", "tmp", "http://%%%IP%%%:%%%PORT%%%/"]
+}
+```
+
+### Nikto
+
+Run Nikto web server scanner:
+
+```json
+"nikto": {
+  "name": "Nikto",
+  "text": "Launch Nikto",
+  "detached": false,
+  "in_terminal": false,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/nikto",
+  "args": ["--host", "%%%IP%%%", "--port", "%%%PORT%%%"]
+}
+```
+
+### Nuclei
+
+Run Nuclei vulnerability scanner:
+
+```json
+"nuclei": {
+  "name": "Nuclei",
+  "text": "Launch Nuclei",
+  "detached": false,
+  "in_terminal": false,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/nuclei",
+  "args": ["-u", "%%%IP%%%", "-ni"]
+}
+```
+
+### Feroxbuster
+
+Directory and file brute-forcing with feroxbuster:
+
+```json
+"feroxbuster": {
+  "name": "feroxbuster",
+  "text": "Scan files and folders with feroxbuster",
+  "detached": false,
+  "edit_before_launch": false,
+  "binary": "/usr/bin/feroxbuster",
+  "args": [
+    "-n", "-k", "-e", "--thorough", "-B", "--no-state",
+    "-C", "404", "400",
+    "--url", "%%%PROTO%%%://%%%IP%%%:%%%PORT%%%/",
+    "-w", "/usr/share/wordlists/SecLists/Discovery/Web-Content/raft-large-directories-and-files.txt"
+  ]
+}
+```
+
+<Note>
+  The `%%%PROTO%%%` variable automatically resolves to `http` or `https` based on the port number.
+</Note>
+
+### Custom SMB enumeration script
+
+Run a custom Bash script:
+
+```json
+"smb_script": {
+  "name": "SMB enum",
+  "text": "Launch custom smb enumeration script",
+  "detached": false,
+  "edit_before_launch": false,
+  "binary": "/bin/bash",
+  "args": ["scripts/smb.sh", "%%%IP%%%"]
+}
+```
+
+## Using custom variables
+
+You can define custom variables in the `user_variables` section and reference them in tool configurations:
+
+```json
+"user_variables": {
+  "XFREERDP_KEYBOARD": "0x0000040C"
+}
+```
+
+Then use it in a tool:
+
+```json
+"xfreerdp": {
+  "name": "xfreerdp",
+  "text": "Launch xfreerdp",
+  "detached": true,
+  "in_terminal": false,
+  "binary": "/usr/bin/xfreerdp",
+  "args": [
+    "/v:%%%IP%%%",
+    "/d:%%%DOMAIN%%%",
+    "/u:%%%USERNAME%%%",
+    "/p:%%%PASSWORD%%%",
+    "/cert:ignore",
+    "/drive:tmp,/tmp",
+    "/dynamic-resolution",
+    "/kbd:%%%XFREERDP_KEYBOARD%%%"
+  ]
+}
+```
+
+## Associating tools with ports
+
+After defining a tool, associate it with specific ports in the `ports_associations` section:
+
+```json
+"ports_associations": {
+  "tcp": {
+    "80": ["firefox", "nikto", "feroxbuster"],
+    "443": ["firefox", "nikto", "feroxbuster"],
+    "445": ["smb_script"]
+  },
+  "udp": {
+    "161": ["onesixtyone"]
+  }
+}
+```
+
+Tools listed here will appear as available options when right-clicking on discovered ports.
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use absolute paths">
+    Always specify absolute paths for binaries to avoid PATH-related issues:
+    
+    ```json
+    "binary": "/usr/bin/nmap"  // Good
+    "binary": "nmap"           // Avoid
+    ```
+  </Accordion>
+
+  <Accordion title="Separate arguments">
+    Each argument should be a separate array element:
+    
+    ```json
+    "args": ["-nv", "%%%IP%%%", "%%%PORT%%%"]  // Good
+    "args": ["-nv %%%IP%%% %%%PORT%%%"]        // Avoid
+    ```
+  </Accordion>
+
+  <Accordion title="Test tools manually first">
+    Test your tool commands manually in the terminal before adding them to QtRecon to ensure they work correctly.
+  </Accordion>
+
+  <Accordion title="Use detached for long-running tasks">
+    Set `"detached": true` for tools that run for extended periods to prevent blocking the QtRecon interface.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Autorun rules" icon="bolt" href="/configuration/autorun-rules">
+    Configure automatic tool execution on port discovery
+  </Card>
+  <Card title="Variables" icon="dollar-sign" href="/configuration/variables">
+    Learn about all available variables
+  </Card>
+</CardGroup>

@@ -1,0 +1,88 @@
+---
+title: What is QtRecon
+description: A Qt-based reconnaissance automation tool for penetration testing
+---
+
+QtRecon is a reconnaissance automation tool with a Qt-based GUI that helps you automate and speed up your entire recon phase during penetration testing engagements.
+
+## Why QtRecon?
+
+QtRecon was heavily inspired by the SPARTA project, with significant improvements in features and workflow. The tool was developed during an OSCP certification and proved valuable during both lab work and the exam.
+
+Key benefits:
+
+- **Time savings**: Automate repetitive reconnaissance tasks
+- **Organized workflow**: Keep all your recon data in one place
+- **Customizable**: Configure tools and autorun settings to match your methodology
+- **Persistent storage**: Save and load workspaces as SQLite databases
+
+## Key features
+
+### Automated task execution
+
+QtRecon can launch programs automatically when ports are discovered on a target. For example, when port 80 is found, it can automatically start feroxbuster and nikto scans.
+
+```json
+"autorun": {
+  "tcp": {
+    "80": [
+      "feroxbuster",
+      "nikto"
+    ],
+    "445": [
+      "smb_script"
+    ]
+  }
+}
+```
+
+### Interactive tool launching
+
+Launch your favorite tools interactively with dynamic variable replacement. You can configure custom programs with arguments that use placeholders like `%%%IP%%%`, `%%%PORT%%%`, `%%%USERNAME%%%`, and `%%%PASSWORD%%%`.
+
+### Workspace management
+
+Your workspace is saved as a SQLite database file, which means:
+
+- Load and save workspaces at will
+- Edit the database by hand if needed
+- Share workspaces with team members
+- Keep all scan results, notes, and credentials in one place
+
+### Notes and snippets
+
+Store notes for each host with rich text support, including images. Access your frequently-used code snippets and reverse shells directly from the interface.
+
+### Credential storage
+
+Store and manage credentials for each host, with support for:
+
+- Passwords
+- Hashes
+- SSH keys
+- Domain credentials
+- Automatic credential replacement in commands
+
+### Automatic screenshots
+
+QtRecon can automatically capture screenshots of your screen every few seconds during engagements, helping you save proof when you're focused on exploitation.
+
+## Configuration-driven
+
+QtRecon expects significant configuration from you to set up all programs and autorun settings. Everything is configurable through:
+
+- The graphical interface (press F10)
+- Direct JSON editing at `$XDG_CONFIG_HOME/qtrecon/conf.json` or `~/.config/qtrecon/conf.json`
+
+The tool comes with a default configuration (`conf.json.example`) that you can use as a starting point.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install QtRecon with pipenv and set up privileged scans
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Launch your first scan and explore the interface
+  </Card>
+</CardGroup>

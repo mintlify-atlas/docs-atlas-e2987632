@@ -1,0 +1,340 @@
+---
+title: Import and export data
+description: Import XML scan results and export QtRecon workspaces for collaboration and archival
+---
+
+QtRecon supports importing scan results from external tools and exporting your workspace for sharing or long-term storage.
+
+## Import XML files
+
+Import scan results from nmap and masscan to populate your workspace with discovered hosts.
+
+### Supported formats
+
+- **Nmap XML** - Output from `nmap -oX` or `-oA`
+- **Masscan XML** - Output from `masscan -oX`
+
+### Import workflow
+
+<Steps>
+  <Step title="Access import dialog">
+    From the menu bar:
+    - **File → Import → Import XML files**
+
+    Or use the keyboard shortcut if configured.
+  </Step>
+
+  <Step title="Select XML files">
+    In the file dialog:
+    - Select one or more XML files
+    - Multiple files are processed in parallel for speed
+    - Large scans are parsed using multiple CPU cores
+
+    The parser at `utils/nmapImporter.py:38-59` processes files concurrently:
+    ```python
+    nb_of_processes = max(multiprocessing.cpu_count()-1, 1)
+    pool = multiprocessing.Pool(processes=nb_of_processes)
+    ```
+  </Step>
+
+  <Step title="Handle existing hosts">
+    When an imported host already exists in your workspace, QtRecon prompts:
+
+    **Merge**
+    - Keep existing data
+    - Add newly discovered ports
+    - Update service descriptions
+
+    **Replace**
+    - Delete existing host data
+    - Import fresh scan results
+    - Lose previous notes and tabs
+
+    **Keep existing**
+    - Skip this import
+    - Preserve current workspace data
+
+    **Apply to all**
+    - Use the same choice for remaining conflicts
+    - Speeds up imports with many hosts
+
+    From `utils/nmapImporter.py:66-101`, the merge logic:
+    ```python
+    if id_of_already_existing_machine:
+        if not do_not_prompt_user_anymore:
+            self.ask_user_what_to_do.emit(self.nmap_data[host]['ip'], 
+                                          self.nmap_data[host]['hostname'])
+            response, dialog_box = self.user_answers.get()
+
+        if response == dialog_box.ui.merge_all:
+            do_not_prompt_user_anymore = True
+            response = dialog_box.ui.merge
+    ```
+  </Step>
+
+  <Step title="Monitor import progress">
+    The progress dialog shows:
+
+    **Step 1/2: Parsing XML files**
+    - Processing N files in parallel
+    - Extracts host, port, and service data
+
+    **Step 2/2: Importing hosts into database**
+    - Inserting/merging hosts one by one
+    - Resolving conflicts based on your choices
+  </Step>
+
+  <Step title="Trigger autorun (optional)">
+    After import, QtRecon can automatically run tools on discovered services.
+
+    This behavior is controlled by `conf.json`:
+    ```json
+    "user_prefs": {
+        "enable_autorun_on_xml_import": false
+    }
+    ```
+
+    <Warning>
+      Setting this to `true` may launch many processes if importing large scans. Use with caution.
+    </Warning>
+  </Step>
+</Steps>
+
+## Export workspace
+
+Export your entire workspace to a SQLite database file for archival or sharing.
+
+### Export process
+
+<Steps>
+  <Step title="Save your workspace">
+    From the menu bar:
+    - **File → Save** (for current file)
+    - **File → Save As** (for new file)
+
+    Choose a location and filename with `.sqlite` extension.
+  </Step>
+
+  <Step title="What gets exported">
+    The SQLite database contains:
+
+    **Hosts table**
+    - IP addresses and hostnames
+    - Operating system detection
+    - MAC addresses
+    - Highlight colors and pwned status
+    - User notes
+
+    **Ports table**
+    - Protocol (TCP/UDP)
+    - Port numbers
+    - Service descriptions
+    - Status (open/closed/filtered)
+
+    **Tabs table**
+    - Command outputs
+    - Timestamps
+    - Associated job IDs
+
+    **Credentials table**
+    - Stored credentials per host
+    - Domain, username, password/hash
+    - Credential types
+
+    **Logs table** (optional)
+    - Runtime events
+    - Scan history
+    - Error messages
+  </Step>
+
+  <Step title="Configure export options">
+    Control what data is saved via `conf.json`:
+
+    ```json
+    "user_prefs": {
+        "delete_logs_on_save": false,
+        "autosave": false,
+        "autosave_interval": 600000
+    }
+    ```
+
+    From `core/database.py:88-96`, the export logic:
+    ```python
+    if Config.get()['user_prefs']['delete_logs_on_save']:
+        dest.execute("DELETE FROM logs;")
+        dest.execute("UPDATE SQLITE_SEQUENCE SET SEQ=0 WHERE NAME='logs';")
+    else:
+        # Ignore RUNTIME logs
+        dest.execute("DELETE FROM logs WHERE type == 'RUNTIME';")
+    ```
+
+    **delete_logs_on_save**
+    - `true` - Remove all logs (smaller files)
+    - `false` - Keep non-runtime logs
+
+    **autosave**
+    - `true` - Automatically save every N milliseconds
+    - `false` - Manual save only
+
+    **autosave_interval**
+    - Time in milliseconds (default: 600000 = 10 minutes)
+  </Step>
+</Steps>
+
+## Load existing workspace
+
+Restore a previously saved workspace to continue your reconnaissance.
+
+### Loading methods
+
+<Steps>
+  <Step title="From the GUI">
+    **File → Open**
+    - Browse to your `.sqlite` file
+    - Loading happens in background thread
+    - Progress indicator shows during import
+  </Step>
+
+  <Step title="From command line">
+    Launch QtRecon with a database argument:
+
+    ```bash
+    pipenv run python qtrecon.py /path/to/workspace.sqlite
+    ```
+
+    From `qtrecon.py:47-49` and `core/controller.py:47-49`:
+    ```python
+    if len(sys.argv) > 1:
+        file_path = os.path.realpath(sys.argv[1])
+        self.open_db(file_path)
+    ```
+  </Step>
+
+  <Step title="Verify loaded data">
+    After loading:
+    - Host count updates in status bar
+    - Service count reflects imported ports
+    - Credentials table populates
+    - Logs restore (if not deleted)
+    - Jobs table clears (running jobs not restored)
+  </Step>
+</Steps>
+
+## Database format
+
+QtRecon uses SQLite for portability and manual editing capabilities.
+
+### Schema overview
+
+From `core/database.py:16-21`:
+```sql
+CREATE TABLE hosts(
+    id integer primary key autoincrement not null,
+    os text, ip UNIQUE, hostname, mac,
+    highlight text,
+    pwned integer not null default 0 check(pwned IN (0,1)),
+    nmap, notes
+)
+
+CREATE TABLE hosts_ports(
+    host_id integer,
+    proto text,
+    port,
+    status text,
+    description text
+)
+
+CREATE TABLE hosts_tabs(
+    id integer primary key autoincrement not null,
+    host_id integer,
+    job_id integer,
+    cmdline text,
+    title text,
+    text
+)
+
+CREATE TABLE hosts_creds(
+    id INTEGER primary key autoincrement not null,
+    host_id integer,
+    type TEXT DEFAULT 'password',
+    domain TEXT DEFAULT '',
+    username TEXT DEFAULT '',
+    password TEXT DEFAULT ''
+)
+```
+
+### Manual editing
+
+Since workspaces are SQLite databases, you can edit them directly:
+
+```bash
+# Open database
+sqlite3 workspace.sqlite
+
+# Query hosts
+SELECT ip, hostname, os FROM hosts;
+
+# Update notes
+UPDATE hosts SET notes = 'Vulnerable to X' WHERE ip = '10.10.10.5';
+
+# Export to CSV
+.mode csv
+.output hosts.csv
+SELECT * FROM hosts;
+```
+
+## Temporary files
+
+Nmap XML outputs are stored temporarily during scans.
+
+### Output directory
+
+Configured in `conf.json`:
+```json
+"paths": {
+    "nmap_output_dir": "/tmp/QtRecon"
+}
+```
+
+### Cleanup behavior
+
+```json
+"user_prefs": {
+    "remove_nmap_xml_files_after_scan": false
+}
+```
+
+- `true` - Delete XML files after parsing
+- `false` - Keep files for manual review
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Regular exports">
+    Save your workspace frequently, especially during long engagements. Use autosave for critical work.
+  </Accordion>
+
+  <Accordion title="Naming convention">
+    Use descriptive filenames with dates:
+    ```
+    client-webapp-2026-03-04.sqlite
+    internal-network-scan-round2.sqlite
+    ```
+  </Accordion>
+
+  <Accordion title="Import strategy">
+    When merging large scans, choose "Merge All" to avoid repeated prompts. For fresh data, use "Replace All".
+  </Accordion>
+
+  <Accordion title="Backup before merge">
+    Save your workspace before importing XML files that might conflict with existing data.
+  </Accordion>
+
+  <Accordion title="Command-line automation">
+    Load workspaces via command line in scripts:
+    ```bash
+    #!/bin/bash
+    pipenv run python qtrecon.py "$1"
+    ```
+  </Accordion>
+</AccordionGroup>

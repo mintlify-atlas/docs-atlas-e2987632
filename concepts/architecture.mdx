@@ -1,0 +1,201 @@
+---
+title: Architecture
+description: Understanding QtRecon's MVC architecture and core components
+---
+
+QtRecon follows a Model-View-Controller (MVC) architectural pattern to separate concerns and maintain clean code organization.
+
+## MVC pattern
+
+The application is structured around three primary layers:
+
+### Controller
+
+The `Controller` class serves as the central orchestrator of the application. It manages:
+
+- Application initialization and setup
+- Communication between models and views
+- Job execution and management
+- Database operations coordination
+- Configuration loading
+
+```python core/controller.py
+class Controller:
+    APPLICATION_VERSION = "1.7.2"
+    autosave_timer = QTimer()
+    progression_bar_timer = QTimer()
+    screenshot_mgr = None
+
+    def __init__(self, ui):
+        self.ui = ui
+        self.view = View(ui, self)
+        self.setup_initial_project()
+        self.view.setup_ui()
+        self.view.connect_slots()
+```
+
+### View
+
+The `View` class handles all UI-related operations, including:
+
+- Rendering the graphical interface
+- Managing user interactions
+- Updating display elements
+- Creating and managing tabs
+
+### Database
+
+The `Database` class provides a static interface to the SQLite database:
+
+```python core/database.py
+class Database:
+    database = None
+    current_savefile = ""
+    has_unsaved_data = False
+
+    @staticmethod
+    def init_DB():
+        Database.database = sqlite3.connect(':memory:', check_same_thread=False)
+        Database.database.row_factory = lambda C, R: {c[0]: R[i] for i, c in enumerate(C.description)}
+```
+
+<Info>
+QtRecon uses an in-memory SQLite database during runtime, which is exported to disk when you save your workspace.
+</Info>
+
+## Data models
+
+QtRecon implements four primary data models that extend `QAbstractTableModel` to provide data to Qt's view components:
+
+### HostModel
+
+Manages host information and related operations:
+
+```python core/models/hostmodel.py
+class HostModel(QAbstractTableModel):
+    data_updated = Signal(int, int)  # Displayed number of hosts / all hosts
+
+    def __init__(self, parent, controller):
+        QAbstractTableModel.__init__(self, parent)
+        self.controller = controller
+        self.hosts = []
+        self.headers = ['host_id', 'OS', 'IP', 'Hostname']
+```
+
+**Key responsibilities:**
+- Host filtering and searching
+- CRUD operations on hosts
+- Managing host metadata (OS, hostname, IP, pwned status)
+- Creating and updating external tabs
+- Host highlighting and color coding
+
+### JobModel
+
+Handles job execution and lifecycle management:
+
+```python core/models/jobmodel.py
+class JobModel(QAbstractTableModel):
+    def __init__(self, parent, controller):
+        QAbstractTableModel.__init__(self, parent)
+        self.ui = parent
+        self.controller = controller
+        self.jobs = []
+        self.jobs_objects = dict()  # {(int) job_id: (Job) job}
+```
+
+**Key responsibilities:**
+- Creating and tracking jobs (scans, attached programs)
+- Managing job states and status updates
+- Handling nmap scan execution
+- Processing job completion and errors
+
+### CredsModel
+
+Manages credential storage and parsing:
+
+```python core/models/credsmodel.py
+class CredsModel(QAbstractTableModel):
+    data_updated = Signal(int)  # Number of credentials
+
+    def __init__(self, parent):
+        QAbstractTableModel.__init__(self, parent)
+        self.ui = parent
+        self.creds = []
+        self.headers = ['host_id', 'id', 'IP', 'Hostname', 'Type', 'Domain', 'Username', 'Password']
+```
+
+**Key responsibilities:**
+- Storing and retrieving credentials
+- Parsing credentials from various formats (secretsdump, user:password, user:hash)
+- Filtering and sorting credential data
+- Associating credentials with hosts
+
+### LogModel
+
+Manages application logging:
+
+```python core/models/logmodel.py
+class LogModel(QAbstractTableModel):
+    def __init__(self, parent):
+        QAbstractTableModel.__init__(self, parent)
+        self.ui = parent
+        self.logs = []
+        self.headers = ['id', 'Date', 'Type', 'Log']
+```
+
+**Key responsibilities:**
+- Recording application events
+- Storing runtime, info, warning, and critical logs
+- Providing log history access
+
+## Main components
+
+### Configuration management
+
+The `Config` class handles all configuration-related operations:
+
+```python core/config.py
+class Config():
+    config = None
+    config_template_filename = "conf.json.example"
+    config_filename = "conf.json"
+    config_root_path = ""
+```
+
+See [Configuration](/concepts/configuration) for detailed information.
+
+### Job execution
+
+Jobs are executed as `QProcess` instances and can be:
+
+- **Attached**: Output is captured in tabs within the application
+- **Detached**: Programs run independently in external terminals
+- **Privileged**: Executed with elevated permissions using graphical sudo
+
+### Nmap integration
+
+Nmap scans are managed through the `JobModel` with special handling:
+
+```python core/models/jobmodel.py
+def new_scan(self, target: str, ports: str, type: str, speed: str, additional_args: str, 
+             skip_host_discovery: bool, version_probing: bool, default_scripts: bool, 
+             os_detection: bool, tcp_and_udp: bool):
+    # Builds nmap command with output files
+    arg_nmap_output = ['-oX', f"{self.nmap_output_folder}/scan-{job_id}.xml",
+                       '-oN', f"{self.nmap_output_folder}/scan-{job_id}.nmap"]
+```
+
+<Warning>
+Nmap scans that require privileged access (SYN scans, OS detection, UDP scans) will prompt for elevated permissions using the configured graphical sudo tool.
+</Warning>
+
+## Data flow
+
+1. **User interaction** → View captures input
+2. **View** → Controller processes the request
+3. **Controller** → Model updates data
+4. **Model** → Database persists changes
+5. **Model** → Emits signals to notify views
+6. **View** → Updates UI to reflect changes
+
+This architecture ensures separation of concerns and makes the codebase maintainable and testable.

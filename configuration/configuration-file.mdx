@@ -1,0 +1,163 @@
+---
+title: Configuration file
+description: Understanding QtRecon's JSON configuration structure
+---
+
+QtRecon uses a JSON configuration file to manage all settings, tools, automation rules, and preferences. This file controls how the application behaves and which tools are available for reconnaissance.
+
+## Configuration file location
+
+The configuration file is located at:
+
+```
+$XDG_CONFIG_HOME/qtrecon/conf.json
+```
+
+On most Linux systems, this resolves to `~/.config/qtrecon/conf.json`.
+
+## Editing the configuration
+
+You can edit the configuration file in two ways:
+
+<CardGroup cols={2}>
+  <Card title="GUI editor" icon="keyboard">
+    Press **F10** within QtRecon to open the built-in configuration editor
+  </Card>
+  <Card title="Manual editing" icon="file-code">
+    Edit `conf.json` directly with your preferred text editor
+  </Card>
+</CardGroup>
+
+<Warning>
+  When editing manually, ensure the JSON syntax remains valid. Invalid JSON will prevent QtRecon from starting.
+</Warning>
+
+## Configuration sections overview
+
+The configuration file is organized into the following main sections:
+
+### Core settings
+
+<AccordionGroup>
+  <Accordion title="paths">
+    Defines file system paths used by QtRecon.
+    
+    ```json
+    "paths": {
+      "nmap_output_dir": "/tmp/QtRecon"
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="core_binaries">
+    Specifies system binaries required for QtRecon's core functionality.
+    
+    ```json
+    "core_binaries": {
+      "nmap": {
+        "binary": "/usr/bin/nmap",
+        "args": []
+      },
+      "terminal": {
+        "binary": "/usr/bin/konsole",
+        "args": ["-e"]
+      },
+      "graphical_su": {
+        "binary": "/usr/bin/pkexec",
+        "args": []
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="user_binaries">
+    Defines custom tools and scripts available in QtRecon. See [Tool setup](/configuration/tool-setup) for details.
+  </Accordion>
+
+  <Accordion title="ports_associations">
+    Maps port numbers to available tools that can be used against those ports.
+    
+    ```json
+    "ports_associations": {
+      "tcp": {
+        "80": ["nikto", "sqlmap"],
+        "443": ["nikto", "sqlmap"]
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="autorun">
+    Defines which tools should automatically execute when specific ports are discovered. See [Autorun rules](/configuration/autorun-rules) for details.
+  </Accordion>
+
+  <Accordion title="user_prefs">
+    Application preferences and behavior settings.
+    
+    ```json
+    "user_prefs": {
+      "enable_autorun": true,
+      "enable_autorun_on_xml_import": false,
+      "confirm_before_tab_removal": true,
+      "autosave": false,
+      "autosave_interval": 600000,
+      "preferred_interfaces": ["tun0", "vpn0", "eth0"],
+      "preferred_lport": 8444
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="user_variables">
+    Custom variables for use in tool configurations. See [Variables](/configuration/variables) for details.
+  </Accordion>
+
+  <Accordion title="snippets">
+    Pre-defined code snippets and command templates for common tasks like reverse shells and privilege escalation.
+  </Accordion>
+
+  <Accordion title="nmap_options">
+    Default Nmap scanning options.
+    
+    ```json
+    "nmap_options": {
+      "ports": "T:-,U:53,161,631",
+      "type": "-sS",
+      "speed": "-T3",
+      "skip_host_discovery": false,
+      "version_probing": true,
+      "default_scripts": true,
+      "os_detection": true,
+      "tcp_and_udp": true,
+      "additional_args": "-v --min-rate 500"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example configuration
+
+A complete example configuration is available at:
+
+```
+/usr/share/qtrecon/conf.json.example
+```
+
+Copy this file to `$XDG_CONFIG_HOME/qtrecon/conf.json` to get started with a working configuration.
+
+<Tip>
+  Start with the example configuration and customize it gradually as you add your own tools and workflows.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tool setup" icon="wrench" href="/configuration/tool-setup">
+    Configure custom tools and binaries
+  </Card>
+  <Card title="Autorun rules" icon="bolt" href="/configuration/autorun-rules">
+    Set up automatic tool execution
+  </Card>
+  <Card title="Variables" icon="dollar-sign" href="/configuration/variables">
+    Use variables for dynamic tool arguments
+  </Card>
+</CardGroup>

@@ -1,0 +1,271 @@
+---
+title: Troubleshooting
+description: Solutions to common issues in QtRecon
+---
+
+This guide covers common issues and their solutions.
+
+## Privileged scans
+
+### Permission denied when scanning
+
+Nmap requires root privileges for certain scan types (SYN scans, OS detection, etc.).
+
+**Solution**: Configure a graphical sudo tool in settings (F10):
+
+```bash
+/usr/bin/pkexec
+```
+
+Alternative tools:
+- `kdesudo` (KDE)
+- `gksudo` (GNOME)
+- `sudo` with `-A` flag for askpass
+
+### umask issues
+
+If nmap XML files are created with incorrect permissions:
+
+1. Check your system umask: `umask`
+2. Ensure the nmap output directory has correct permissions
+3. Verify the graphical sudo tool preserves environment variables
+
+## Binary not found errors
+
+### Core binary not found
+
+If you see "binary not found" errors:
+
+**Symptom**:
+```
+Error: Binary '/usr/bin/nmap' not found
+```
+
+**Solution**:
+
+1. Open Settings (F10)
+2. Navigate to "Core binaries" tab
+3. Verify binary paths:
+   - **nmap**: Usually `/usr/bin/nmap`
+   - **terminal**: `/usr/bin/konsole` or `/usr/bin/gnome-terminal`
+   - **graphical su**: `/usr/bin/pkexec`
+
+4. Check if binaries exist:
+
+```bash
+which nmap
+which konsole
+which pkexec
+```
+
+### User binary not executable
+
+If a configured tool isn't executable:
+
+**Solution**:
+
+```bash
+# Check file permissions
+ls -l /path/to/binary
+
+# Make executable if needed
+chmod +x /path/to/binary
+```
+
+## Database issues
+
+### Database compatibility errors
+
+**Symptom**:
+```
+Error while importing database: incompatible schema
+```
+
+**Solution**:
+
+QtRecon includes automatic migrations for older database versions (< 1.2, < 1.6, < 1.7). If migration fails:
+
+1. Backup your database file
+2. Create a new database (Ctrl+N)
+3. Import your Nmap XML files (Ctrl+I)
+
+### Unsaved data warning
+
+QtRecon tracks unsaved changes. If you see unexpected warnings:
+
+**Solution**:
+
+- Save your work regularly (Ctrl+S)
+- Enable autosave in Settings (F10) → User Preferences
+- Set autosave interval (default: 5 minutes)
+
+## XML parsing errors
+
+### Invalid Nmap XML
+
+**Symptom**:
+```
+Error parsing XML file
+```
+
+**Causes**:
+
+1. **Incomplete scan**: Nmap was interrupted mid-scan
+2. **Corrupted file**: File was modified or corrupted
+3. **Wrong format**: File is not a valid Nmap XML output
+
+**Solution**:
+
+1. Ensure nmap completed successfully:
+
+```bash
+nmap -oX output.xml [target]
+# Wait for scan to complete
+```
+
+2. Validate XML syntax:
+
+```bash
+xmllint --noout output.xml
+```
+
+3. Verify it's Nmap output:
+
+```bash
+head -n 5 output.xml
+# Should show: <?xml version="1.0"?>
+# <!DOCTYPE nmaprun>
+```
+
+### Missing XML files
+
+**Symptom**: Nmap XML files disappear after scans.
+
+**Cause**: The `remove_nmap_xml_files_after_scan` option is enabled.
+
+**Solution**:
+
+1. Open Settings (F10)
+2. Navigate to "User Preferences"
+3. Uncheck "Remove Nmap XML files after scan"
+4. Click OK
+
+<Warning>
+With this option enabled, XML files are automatically deleted after being imported. Disable it if you need to keep the raw XML files.
+</Warning>
+
+## Screenshot functionality
+
+### Screen lock detection issues
+
+**Symptom**: Screenshots are taken even when screen is locked.
+
+**Solution**:
+
+Configure screen lock detection:
+
+1. Navigate to Screenshots tab in main window
+2. Enable "Don't screenshot if screen is locked"
+3. Configure detection command:
+
+**For KDE/Plasma**:
+```bash
+dbus-send --session --dest=org.freedesktop.ScreenSaver --type=method_call --print-reply --reply-timeout=20000 /org/freedesktop/ScreenSaver org.freedesktop.ScreenSaver.GetActive
+```
+
+Expected result: `boolean true`
+
+**For GNOME**:
+```bash
+gnome-screensaver-command -q
+```
+
+Expected result: `The screensaver is active`
+
+### Process tracking
+
+**Issue**: Screenshot includes too many background processes.
+
+**Solution**:
+
+Configure process blacklist in `conf.json`:
+
+```json
+"screenshots": {
+  "include_processes": true,
+  "processes_blacklist": [
+    "systemd",
+    "dbus-daemon",
+    "kwin_x11"
+  ],
+  "processes_ppid_blacklist": [1, 2]
+}
+```
+
+## Configuration issues
+
+### Invalid JSON in configuration
+
+**Symptom**:
+```
+Invalid configuration file: JSON decode error
+```
+
+**Solution**:
+
+1. Validate JSON syntax:
+
+```bash
+python3 -m json.tool ~/.config/qtrecon/conf.json
+```
+
+2. If invalid, restore default configuration:
+
+```bash
+cd /path/to/qtrecon
+cp conf.json.example ~/.config/qtrecon/conf.json
+```
+
+3. Restart QtRecon
+
+### Configuration file not found
+
+QtRecon looks for configuration in:
+
+1. `$XDG_CONFIG_HOME/qtrecon/conf.json`
+2. `~/.config/qtrecon/conf.json`
+
+If not found, it falls back to `conf.json.example` and creates a new configuration file.
+
+## Performance issues
+
+### High memory usage
+
+**Cause**: Large in-memory database with many hosts/tabs.
+
+**Solution**:
+
+1. Close unused tabs regularly
+2. Save and restart QtRecon periodically
+3. Delete hosts with no services: File → Delete hosts with no services
+
+### Slow autosave
+
+**Solution**:
+
+1. Open Settings (F10)
+2. Increase autosave interval
+3. Or disable autosave and save manually (Ctrl+S)
+
+## Getting help
+
+If you encounter issues not covered here:
+
+1. Check the QtRecon repository for known issues
+2. Review configuration examples in `conf.json.example`
+3. Enable detailed logging to diagnose problems
+4. Report bugs with:
+   - QtRecon version
+   - Operating system
+   - Configuration file (sanitized)
+   - Error messages and logs
