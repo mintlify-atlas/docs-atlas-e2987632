@@ -1,0 +1,83 @@
+{
+  "projectType": "general",
+  "projectName": "QtRecon",
+  "projectDescription": "Automated reconnaissance tool with GUI that speeds up network scanning and tool execution phases.",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": "#7c7c7c",
+  "darkColor": "#d1d1d1",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get Started",
+        "pages": [
+          "introduction",
+          "installation",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Core Concepts",
+        "pages": [
+          "concepts/architecture",
+          "concepts/configuration",
+          "concepts/workspace"
+        ]
+      },
+      {
+        "group": "Features",
+        "pages": [
+          "features/scanning",
+          "features/tool-automation",
+          "features/credentials",
+          "features/screenshots",
+          "features/snippets"
+        ]
+      },
+      {
+        "group": "Configuration",
+        "pages": [
+          "configuration/configuration-file",
+          "configuration/tool-setup",
+          "configuration/autorun-rules",
+          "configuration/variables"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/first-scan",
+          "guides/custom-tools",
+          "guides/import-export",
+          "guides/advanced-usage"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/database-schema",
+          "reference/keyboard-shortcuts",
+          "reference/troubleshooting"
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Automated Nmap scanning with customizable options",
+    "Port-based tool automation (autorun programs)",
+    "Credential storage and management",
+    "Automatic screenshot capture",
+    "Custom tool integration and configuration",
+    "SQLite workspace management",
+    "Snippet library for common commands"
+  ],
+  "publicApiSurface": [
+    "Nmap scan execution and parsing",
+    "Tool autorun on port discovery",
+    "Credential management",
+    "Screenshot automation",
+    "Configuration system",
+    "Database operations",
+    "Custom tool integration"
+  ]
+}
